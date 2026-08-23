@@ -10,3 +10,10 @@ archivev/
 *.mkv
 *.mp4
 
+
+venv/
+.venv/
+
+playlistv/
+__pycache__/
+*.pyc
