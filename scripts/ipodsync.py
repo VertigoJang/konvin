@@ -2,8 +2,8 @@
 
 # ============================================
 # iPodSync
-# Version : v0.5
-# Codename: Playlist
+# Version : v1.0
+# Codename: Stable
 # ============================================
 
 import json
@@ -11,8 +11,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-VERSION  = "v0.5"
-CODENAME = "Playlist"
+VERSION  = "v1.0"
+CODENAME = "Stable"
 
 BASE      = Path.home() / "iPodSync"
 TEMPV     = BASE / "tempv"
@@ -99,10 +99,12 @@ CONFIG = load_config()
 
 def build_ytdlp_command(url, dest_dir, is_playlist):
     if is_playlist:
-        template = str(dest_dir / "%(playlist_index)03d - %(title)s [%(id)s].%(ext)s")
+        # playlist_index 가 없는 URL(단일 영상)이면 0 을 대신 씀
+        template = str(dest_dir / "%(playlist_index|000)03d - %(title)s [%(id)s].%(ext)s")
     else:
         template = str(dest_dir / "%(title)s [%(id)s].%(ext)s")
 
+    # --download-archive: 이미 받은 영상 ID를 기록해 재실행 시 건너뜀
     cmd = [
         "yt-dlp",
         "-f", "bestvideo[height<=480]+bestaudio/best[height<=480]",
@@ -113,7 +115,6 @@ def build_ytdlp_command(url, dest_dir, is_playlist):
     ]
 
     if is_playlist:
-        # --download-archive: 이미 받은 영상 ID를 기록해 재실행 시 건너뜀
         cmd += [
             "--yes-playlist",
             "--ignore-errors",
@@ -181,6 +182,7 @@ def build_ffmpeg_command(source, dest, quality):
         "-ar", "44100",
         "-ac", "2",
         "-movflags", "+faststart",
+        # .part 확장자로는 컨테이너를 추론할 수 없으므로 포맷을 명시
         "-f", "mp4",
         str(dest),
     ]
@@ -270,7 +272,11 @@ def convert_videos(source_dir, per_video_quality=False):
         print(f"No convertible files in {source_dir}")
         return
 
-    stats = {"converted": 0, "skipped": 0, "failed": 0}
+    stats = {"converted": 0, "skipped": 0, "failed": 0, "aborted": 0}
+
+    def remaining():
+        done = stats["converted"] + stats["skipped"] + stats["failed"]
+        return len(files) - done
 
     for file in files:
 
@@ -285,8 +291,10 @@ def convert_videos(source_dir, per_video_quality=False):
             status = convert_one(file, quality)
         except KeyboardInterrupt:
             print("Aborted. Re-run 'Convert Existing Files' to resume.")
+            stats["aborted"] = remaining()
             break
         except FileNotFoundError:
+            stats["aborted"] = remaining()
             break
 
         stats[status] += 1
@@ -298,6 +306,10 @@ def convert_videos(source_dir, per_video_quality=False):
     print(f"Converted : {stats['converted']}")
     print(f"Skipped   : {stats['skipped']}")
     print(f"Failed    : {stats['failed']}")
+
+    if stats["aborted"]:
+        print(f"Aborted   : {stats['aborted']}")
+
     print("=" * 50)
 
 
@@ -325,6 +337,11 @@ def ask_quality(default=DEFAULT_QUALITY):
 
     print(f"Invalid selection; using {default}.")
     return default
+
+
+def ask_per_video_quality():
+    answer = input("\nSet quality per video? (Y/N): ").strip().upper()
+    return answer == "Y"
 
 
 def collect_urls(prompt="YouTube URL: "):
@@ -392,8 +409,13 @@ def menu_download_playlist():
     if not download_videos(urls, PLAYLISTV, is_playlist=True):
         return
 
-    answer = input("\nSet quality per video? (Y/N): ").strip().upper()
-    convert_videos(PLAYLISTV, per_video_quality=(answer == "Y"))
+    # 받은 게 없으면 화질을 물어볼 이유가 없음
+    if not collect_source_files(PLAYLISTV):
+        print()
+        print("No new files to convert.")
+        return
+
+    convert_videos(PLAYLISTV, per_video_quality=ask_per_video_quality())
 
 
 def menu_convert_existing():
@@ -414,10 +436,17 @@ def menu_convert_existing():
         print("Invalid option.")
         return
 
+    if not any(collect_source_files(t) for t in targets):
+        print()
+        print("No convertible files found.")
+        return
+
+    per_video = ask_per_video_quality()
+
     for target in targets:
         print()
         print(f"Scanning {target}...")
-        convert_videos(target)
+        convert_videos(target, per_video_quality=per_video)
 
 
 def menu_settings():
