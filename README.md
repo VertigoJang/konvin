@@ -1,193 +1,198 @@
-# iPodSync
+<div align="center">
 
-> 2020년대의 영상 콘텐츠를 2000년대 iPod에서 가장 쉽게 재생할 수 있게 하는 프로그램
+<img src="assets/konvin.png" width="128" alt="Konvin">
 
----
+# Konvin
 
-# 탄생 배경
+**유튜브 영상을 클릭휠 아이팟에서 볼 수 있게 바꿔 줍니다.**
 
-iPod Classic은 현재도 뛰어난 음악 감상 기기이지만, 현대의 영상 포맷(WebM, MKV, H.265 등)을 직접 재생할 수 없다.
-특히 iPod Video(5세대)는 다음과 같은 제약이 존재한다.
+*Turns YouTube videos into something a click-wheel iPod can play.*
 
-- H.264 Baseline Profile 필요
-- AAC 오디오 필요
-- 제한된 해상도 지원
-- 최신 YouTube 포맷 미지원
-- iTunes를 통한 동기화 필요
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-현재 사용자는 다음 과정을 직접 수행해야 한다.
-
-1. YouTube 링크 복사
-2. yt-dlp로 다운로드
-3. FFmpeg 명령어 입력
-4. iPod 호환 포맷으로 변환
-5. iTunes로 전송
-6. iPod 동기화
-
-비록 Handbrake같은 프로그램이 있으나, 설정이 복잡하고 무겁다. 반면에 iPodSync의 목적은 이 과정을 최대한 자동화하는 것이다.
+</div>
 
 ---
 
-# 프로젝트 목표
+## 무엇을 하는 프로그램인가요
 
-# 단기 목표
-iPod Classic Gen5에서 재생 가능한 영상을 자동 생성한다.
-사용자는 원하는 유튜브 링크 입력만 수행하고, 변환 등의 나머지 업무는 프로그램이 처리한다.
+주소를 붙여 넣으면 영상을 받아서, 클릭휠 아이팟이 재생할 수 있는 형식으로 바꿔 줍니다.
+해상도·코덱·비트레이트를 매번 맞출 필요 없이 버튼 하나로 끝납니다.
 
-## 중기 목표
-여러 세대의 iPod을 지원한다.
+출력 형식은 iPod Classic 5세대 기준입니다.
 
-| 세대 | 모델 |
-|------|------|
-| Gen4 | iPod Photo |
-| Gen5 | iPod Video |
-| Gen6 | iPod Classic |
-| Gen7 | iPod Classic |
+| 항목 | 값 |
+|---|---|
+| 컨테이너 | MP4 (`.m4v`) |
+| 영상 | H.264 Constrained Baseline, Level 3.0 |
+| 해상도 | 320×240 (원본 비율 유지, 레터박스) |
+| 영상 비트레이트 | 384k / 700k / 768k 중 선택 |
+| 소리 | AAC-LC, 44.1kHz, 스테레오 |
+| 소리 비트레이트 | 96k / 128k / 160k 중 선택 |
 
-### 장기 목표
-실행 파일로 배포한다.
+영상과 소리 품질은 따로 고를 수 있습니다. 음악 위주의 영상이라면 영상을 낮게,
+소리를 높게 두는 식으로 조합하면 됩니다.
 
-| 플랫폼 | 배포 형태 |
-|--------|-----------|
-| macOS  | `iPodSync.app` |
-| Windows | `iPodSync.exe` |
+## 주요 기능
 
----
+- 단일 영상과 재생목록 모두 지원 (재생목록은 파일 이름에 순번이 붙습니다)
+- 여러 주소를 대기열에 넣고 한 번에 처리
+- 이미 받은 영상은 자동으로 건너뜀
+- 진행률과 남은 시간 표시
+- 중단해도 망가진 파일이 남지 않고, 이어서 변환 가능
+- 작업이 끝나면 시스템 알림
+- 쌓인 파일을 폴더별로 정리하는 기능
+- 한국어 / English
 
-## 개발 로드맵
+## 설치
 
-### v0.1 — 최초 공개 버전
+### 필요한 것
 
-상태: 완료
+- Python 3.10 이상
+- ffmpeg
+- yt-dlp
+- PySide6
 
-- yt-dlp 연동
-- FFmpeg 연동
-- Gen5 호환 M4V 생성
-- GitHub 저장소 생성
+### Arch Linux
 
----
-
-### v0.2 — 다운로드 자동화 개선
-
-상태: 완료
-목표: 실사용 가능한 CLI 구축
-
-- 다중 URL 입력
-- 다운로드 대기열 표시
-- `archivev` 자동 이동
-- 중복 변환 방지
-- 변환 통계 출력
-
----
-
-### v0.3 — 메뉴형 CLI
-
-기존 프롬프트 방식에서 메뉴 시스템으로 개선한다.
-
-1. Download Video
-2. Download Playlist
-3. Convert Existing Files
-4. Settings
-5. Exit
-
-- 설정 저장
-- 기존 영상 재변환
-- 장치 선택
-- 고·중·저화질 선택
-
----
-
-### v0.4 — 장치 프로파일 시스템
-
-프로그램 시작 시 장치를 선택하면 FFmpeg 프리셋이 자동 적용된다.
-
-Q: Which iPod are you using?
-
-1. Gen4
-2. Gen5
-3. Gen6
-4. Gen7
-
----
-
-### v0.5 — 재생목록 지원
-
-- YouTube Playlist 자동 다운로드
-- 재생목록 폴더 생성
-- 이어받기
-- 중복 제거
-
----
-
-### v1.0 — 정식 공개판
-
-목표: 실제 사용 가능한 안정적인 프로젝트
-
-- 안정화
-- README 정비
-- 설정 파일
-- 로그 시스템
-- 에러 리포트
-- GitHub Release
-
----
-
-### v1.5 — iTunes 연동 보조 기능
-
-변환 후 iTunes 작업을 최소화한다.
-
-- VMware 공유폴더 지원
-- 자동 복사
-- Import 폴더 생성
-
----
-
-### v2.0 — GUI 버전
-
-기술: PySide6
-목표: 터미널 사용 그만
-
-```
-+----------------------------------+
-|           iPodSync               |
-+----------------------------------+
-  YouTube URL
-  [________________________]
-  [        Download        ]
-
-  Device: Gen5
-  Output: changedv
-+----------------------------------+
+```bash
+sudo pacman -S python ffmpeg
+git clone https://github.com/VertigoJang/konvin.git
+cd konvin
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-gui.txt
 ```
 
+### Debian / Ubuntu
+
+```bash
+sudo apt install python3 python3-venv ffmpeg
+git clone https://github.com/VertigoJang/konvin.git
+cd konvin
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-gui.txt
+```
+
+### Fedora
+
+```bash
+sudo dnf install python3 ffmpeg
+git clone https://github.com/VertigoJang/konvin.git
+cd konvin
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-gui.txt
+```
+
+## 실행
+
+```bash
+source .venv/bin/activate
+python scripts/konvin.py
+```
+
+명령줄만 쓰고 싶다면:
+
+```bash
+python scripts/ipodsync.py
+```
+
+## 파일이 저장되는 곳
+
+모든 파일은 홈 디렉터리의 `Konvin` 폴더 아래에 들어갑니다.
+
+| 폴더 | 내용 |
+|---|---|
+| `tempv` | 단일 영상으로 받은 원본 |
+| `playlistv` | 재생목록으로 받은 원본 |
+| `changedv` | **변환이 끝난 영상 — 아이팟에 넣을 파일** |
+| `archivev` | 변환 후 보관된 원본 |
+
+`download_archive.txt`에 이미 받은 영상의 목록이, `config.json`에 설정이 저장됩니다.
+프로그램의 설정 › 정리 탭에서 쌓인 파일을 지울 수 있습니다.
+
+## 버그 신고
+
+[GitHub Issues](https://github.com/VertigoJang/konvin/issues)에 남겨 주세요.
+프로그램의 "로그 보기"를 눌러서 나오는 내용을 함께 보내 주시면 원인을 찾는 데 큰 도움이 됩니다.
+
+## 후원
+
+마음에 드셨다면 개발자에게 커피 한 잔, 맥주 한 잔 어떠세요?
+
+[☕ Buy me a coffee](https://buymeacoffee.com/iputaspellonyou)
+
+## 라이선스
+
+MIT License — 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
+
+Copyright (c) 2026 장현기 (VertigoJang)
+
+이 프로그램은 [yt-dlp](https://github.com/yt-dlp/yt-dlp)와 [ffmpeg](https://ffmpeg.org/)를
+사용합니다. 각각의 라이선스는 해당 프로젝트를 따릅니다.
+
+Konvin은 Apple Inc.와 관련이 없으며, 승인받거나 후원받지 않았습니다.
+iPod은 Apple Inc.의 등록 상표입니다.
+
 ---
 
-### v2.5 — 드래그 앤 드롭
+<div align="center">
 
-영상 파일을 창에 끌어놓으면 자동으로 변환된다.
+## English
 
----
+</div>
 
-### v3.0 — 배포 버전
+**Konvin** downloads a YouTube video and converts it into something a click-wheel
+iPod can actually play — no need to work out the right resolution, codec or
+bitrate yourself.
 
-사용자는 Python 설치 없이 바로 실행할 수 있다.
+Output targets the iPod Classic 5th generation: MP4 (`.m4v`), H.264 Constrained
+Baseline Level 3.0, 320×240 with letterboxing, AAC-LC audio at 44.1kHz stereo.
+Video and audio quality are chosen separately, so you can pair low video with
+high audio for a music video, or the other way round.
 
-| 플랫폼 | 파일 |
-|--------|------|
-| macOS  | `iPodSync.app` |
-| Windows | `iPodSync.exe` |
+### Features
 
----
+- Single videos and playlists (playlist files get a numeric prefix)
+- Queue several URLs and process them in one go
+- Already-downloaded videos are skipped automatically
+- Progress bar with estimated time remaining
+- Stopping never leaves a broken file behind; conversion can be resumed
+- System notification when the batch finishes
+- Built-in cleanup for accumulated files
+- Korean / English interface
 
-### v4.0 — 멀티 디바이스 지원
+### Install
 
-- iPod Photo
-- iPod Video
-- iPod Classic
-- iPod Nano
-- Video Podcast
+Requires Python 3.10+, ffmpeg, yt-dlp and PySide6.
 
----
+```bash
+git clone https://github.com/VertigoJang/konvin.git
+cd konvin
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-gui.txt
+python scripts/konvin.py
+```
 
-## 최종 버전
-언젠가는 만들 수 있겠지?
+Install ffmpeg through your distribution's package manager first
+(`pacman -S ffmpeg`, `apt install ffmpeg`, `dnf install ffmpeg`).
+
+### Where files go
+
+Everything lives under `~/Konvin`. Converted videos — the ones you copy to your
+iPod — end up in `changedv`.
+
+### Bugs
+
+Please open an issue on [GitHub](https://github.com/VertigoJang/konvin/issues).
+Including the output from "Show log" helps a great deal.
+
+### License
+
+MIT. Copyright (c) 2026 장현기 (VertigoJang).
+
+Konvin is not affiliated with, endorsed by, or sponsored by Apple Inc.
+iPod is a registered trademark of Apple Inc.
