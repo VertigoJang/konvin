@@ -11,6 +11,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+_VENV_YTDLP = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "yt-dlp"
+YTDLP = shutil.which("yt-dlp") or (str(_VENV_YTDLP) if _VENV_YTDLP.exists() else "yt-dlp")
+
 VERSION  = "v1.0"
 CODENAME = "Stable"
 
@@ -99,14 +102,14 @@ CONFIG = load_config()
 
 def build_ytdlp_command(url, dest_dir, is_playlist):
     if is_playlist:
-        # playlist_index 가 없는 URL(단일 영상)이면 0 을 대신 씀
+        # playlist_index 가 없는 URL(단일 영상)이면 000 을 대신 씀
         template = str(dest_dir / "%(playlist_index|000)03d - %(title)s [%(id)s].%(ext)s")
     else:
         template = str(dest_dir / "%(title)s [%(id)s].%(ext)s")
 
     # --download-archive: 이미 받은 영상 ID를 기록해 재실행 시 건너뜀
     cmd = [
-        "yt-dlp",
+        YTDLP,
         "-f", "bestvideo[height<=480]+bestaudio/best[height<=480]",
         "-o", template,
         "--no-overwrites",
