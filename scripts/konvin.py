@@ -54,7 +54,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v2.7"
+VERSION  = "v2.7.1"
 CODENAME = "Fetch"
 
 AUTHOR     = "장현기 (VertigoJang)"
@@ -878,6 +878,11 @@ def build_ytdlp_args(url, dest_dir, is_playlist):
         "--download-archive", str(ARCHIVE_FILE),
         "--newline",
     ]
+
+    # yt-dlp 는 영상과 소리를 따로 받아 ffmpeg 로 합친다. PATH 에 ffmpeg 가 없고
+    # 직접 내려받은 것을 쓰는 경우, 그 위치를 알려 주지 않으면 병합이 되지 않는다.
+    if os.path.sep in FFMPEG:
+        args += ["--ffmpeg-location", str(Path(FFMPEG).parent)]
 
     if is_playlist:
         args += ["--yes-playlist", "--ignore-errors"]
