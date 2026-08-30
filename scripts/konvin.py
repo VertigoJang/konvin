@@ -2,8 +2,8 @@
 
 # ============================================
 # Konvin
-# Version : v2.5
-# Codename: Namesake
+# Version : v2.6
+# Codename: Crossing
 #
 # Copyright (c) 2026 장현기 (VertigoJang)
 # MIT License — see LICENSE
@@ -18,9 +18,8 @@ import sys
 from collections import deque
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, Qt
-from PySide6.QtGui import QDesktopServices, QFont
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QProcess, Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -49,16 +48,36 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v2.5"
-CODENAME = "Namesake"
+VERSION  = "v2.6"
+CODENAME = "Crossing"
 
-AUTHOR       = "장현기 (VertigoJang)"
-COPYRIGHT    = f"Copyright (c) 2026 {AUTHOR}"
-REPO_URL     = "https://github.com/VertigoJang/konvin"
-ISSUES_URL   = "https://github.com/VertigoJang/konvin/issues"
-DONATE_URL   = "https://buymeacoffee.com/iputaspellonyou"
+AUTHOR     = "장현기 (VertigoJang)"
+COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
+REPO_URL   = "https://github.com/VertigoJang/konvin"
+ISSUES_URL = "https://github.com/VertigoJang/konvin/issues"
+DONATE_URL = "https://buymeacoffee.com/iputaspellonyou"
 
-BASE      = Path.home() / APP_NAME
+IS_WINDOWS = sys.platform == "win32"
+IS_MACOS   = sys.platform == "darwin"
+
+
+def default_base():
+    """작업 폴더 위치.
+
+    윈도우는 파일 이름의 대소문자를 구분하지 않아, 홈에 소스를 konvin 으로
+    받아 두면 작업 폴더 Konvin 과 같은 폴더가 되어 버린다. 그래서 윈도우에서는
+    문서 폴더 아래에 둔다.
+    """
+    if IS_WINDOWS:
+        documents = Path.home() / "Documents"
+
+        if documents.is_dir():
+            return documents / APP_NAME
+
+    return Path.home() / APP_NAME
+
+
+BASE      = default_base()
 TEMPV     = BASE / "tempv"
 CHANGEDV  = BASE / "changedv"
 ARCHIVEV  = BASE / "archivev"
@@ -67,16 +86,42 @@ PLAYLISTV = BASE / "playlistv"
 ARCHIVE_FILE = BASE / "download_archive.txt"
 CONFIG_FILE  = BASE / "config.json"
 
-LEGACY_BASE = Path.home() / "iPodSync"
+# 예전 버전이 쓰던 위치들
+LEGACY_BASES = [Path.home() / "iPodSync"]
+
+if IS_WINDOWS:
+    # v2.5 까지는 윈도우에서도 홈 바로 아래에 두었다
+    LEGACY_BASES.append(Path.home() / APP_NAME)
+
+
+def looks_like_workspace(path):
+    """작업 폴더로 보이는지 확인. 소스 폴더를 잘못 옮기지 않기 위한 검사."""
+    if not path.is_dir():
+        return False
+
+    markers = ("tempv", "changedv", "archivev", "playlistv")
+    return any((path / marker).is_dir() for marker in markers)
 
 
 def migrate_legacy_base():
-    """예전 이름(iPodSync) 폴더가 있고 새 폴더가 없으면 그대로 옮긴다."""
-    if LEGACY_BASE.exists() and not BASE.exists():
+    """예전 위치에 작업 폴더가 있으면 현재 위치로 옮긴다."""
+    if BASE.exists():
+        return
+
+    for legacy in LEGACY_BASES:
+        if legacy == BASE:
+            continue
+
+        if not looks_like_workspace(legacy):
+            continue
+
         try:
-            LEGACY_BASE.rename(BASE)
+            BASE.parent.mkdir(parents=True, exist_ok=True)
+            legacy.rename(BASE)
         except OSError:
             pass
+
+        return
 
 
 migrate_legacy_base()
@@ -87,14 +132,27 @@ for _d in (TEMPV, CHANGEDV, ARCHIVEV, PLAYLISTV):
 VALID_EXTENSIONS = [".webm", ".mkv", ".mp4", ".avi", ".mov"]
 OUTPUT_EXTENSIONS = [".m4v"]
 
-_VENV_BIN = Path(__file__).resolve().parent.parent / ".venv" / "bin"
-_VENV_YTDLP = _VENV_BIN / "yt-dlp"
 
-YTDLP = shutil.which("yt-dlp") or (
-    str(_VENV_YTDLP) if _VENV_YTDLP.exists() else "yt-dlp"
-)
-FFMPEG  = shutil.which("ffmpeg") or "ffmpeg"
-FFPROBE = shutil.which("ffprobe") or "ffprobe"
+def find_tool(name):
+    """PATH 에서 먼저 찾고, 없으면 리포의 venv 안을 본다."""
+    found = shutil.which(name)
+
+    if found:
+        return found
+
+    root = Path(__file__).resolve().parent.parent
+
+    if IS_WINDOWS:
+        candidate = root / ".venv" / "Scripts" / f"{name}.exe"
+    else:
+        candidate = root / ".venv" / "bin" / name
+
+    return str(candidate) if candidate.exists() else name
+
+
+YTDLP   = find_tool("yt-dlp")
+FFMPEG  = find_tool("ffmpeg")
+FFPROBE = find_tool("ffprobe")
 
 # iPod Classic 5G: H.264 Baseline Profile Level 3.0, 320x240, 768kbps ceiling
 VIDEO_PROFILES = {
@@ -174,6 +232,7 @@ TEXTS = {
         "no_files":       "변환할 파일이 없습니다.",
         "no_new_files":   "변환할 새 파일이 없습니다.",
         "closing":        "작업이 진행 중입니다. 종료할까요?",
+        "no_ffmpeg":      "ffmpeg 를 찾을 수 없습니다. 설치한 뒤 다시 실행해 주세요.",
 
         "video_low":      "낮음 (384k)",
         "video_medium":   "보통 (700k)",
@@ -274,6 +333,7 @@ TEXTS = {
         "no_files":       "No files to convert.",
         "no_new_files":   "No new files to convert.",
         "closing":        "A task is running. Quit anyway?",
+        "no_ffmpeg":      "ffmpeg was not found. Please install it and try again.",
 
         "video_low":      "Low (384k)",
         "video_medium":   "Medium (700k)",
@@ -546,6 +606,9 @@ def save_config(config):
 def collect_files(source_dir, extensions):
     files = []
 
+    if not source_dir.is_dir():
+        return files
+
     for file in sorted(source_dir.iterdir()):
         if not file.is_file():
             continue
@@ -573,6 +636,20 @@ def format_size(num_bytes):
     return f"{size:.1f} TB"
 
 
+def hidden_process_kwargs():
+    """윈도우에서 콘솔 창이 깜빡이지 않게 한다."""
+    if not IS_WINDOWS:
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+    return {
+        "startupinfo": startupinfo,
+        "creationflags": subprocess.CREATE_NO_WINDOW,
+    }
+
+
 def probe_duration(path):
     """영상 길이를 초 단위로. 실패하면 None."""
     try:
@@ -586,6 +663,7 @@ def probe_duration(path):
             capture_output=True,
             text=True,
             timeout=20,
+            **hidden_process_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -599,14 +677,14 @@ def probe_duration(path):
 def open_folder(path):
     """플랫폼별 파일 관리자로 폴더 열기."""
     try:
-        if sys.platform == "win32":
+        if IS_WINDOWS:
             subprocess.Popen(["explorer", str(path)])
-        elif sys.platform == "darwin":
+        elif IS_MACOS:
             subprocess.Popen(["open", str(path)])
         else:
             subprocess.Popen(["xdg-open", str(path)])
     except OSError:
-        pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
 def open_url(url):
@@ -1036,7 +1114,6 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
 
-        # --- 일반 ---
         general = QWidget()
         general_layout = QVBoxLayout(general)
         form = QFormLayout()
@@ -1054,10 +1131,8 @@ class SettingsDialog(QDialog):
         general_layout.addStretch()
         tabs.addTab(general, texts["tab_general"])
 
-        # --- 정리 ---
         tabs.addTab(CleanupTab(self, texts), texts["tab_cleanup"])
 
-        # --- 폴더 위치 ---
         paths = QWidget()
         paths_outer = QVBoxLayout(paths)
 
@@ -1094,7 +1169,6 @@ class SettingsDialog(QDialog):
         paths_outer.addWidget(scroll)
         tabs.addTab(paths, texts["tab_paths"])
 
-        # --- 정보 ---
         about_scroll = QScrollArea()
         about_scroll.setWidgetResizable(True)
         about_scroll.setWidget(AboutTab(self, texts))
@@ -1285,7 +1359,6 @@ class MainWindow(QMainWindow):
         icon_path = Path(__file__).resolve().parent.parent / "assets" / "konvin.png"
 
         if icon_path.exists():
-            from PySide6.QtGui import QIcon
             icon = QIcon(str(icon_path))
         else:
             icon = self.style().standardIcon(QStyle.SP_MediaPlay)
@@ -1655,6 +1728,10 @@ class MainWindow(QMainWindow):
         if error == QProcess.FailedToStart:
             name = "yt-dlp" if self.stage == "download" else "ffmpeg"
             self.log(f"{name}: failed to start")
+
+            if name == "ffmpeg":
+                QMessageBox.warning(self, APP_NAME, self.tr_("no_ffmpeg"))
+
             self.cleanup_temp()
             self.finish()
 
