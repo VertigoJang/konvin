@@ -46,58 +46,52 @@
 
 ## 설치
 
-### 필요한 것
+### 1. ffmpeg 설치
 
-- Python 3.10 이상
-- ffmpeg
-- yt-dlp
-- PySide6
-
-### Arch Linux
+배포판 패키지 관리자로 먼저 설치해 주세요.
 
 ```bash
-sudo pacman -S python ffmpeg
+sudo pacman -S ffmpeg        # Arch, Manjaro
+sudo apt install ffmpeg      # Debian, Ubuntu, Mint
+sudo dnf install ffmpeg      # Fedora
+sudo zypper install ffmpeg   # openSUSE
+```
+
+### 2. Konvin 설치
+
+```bash
 git clone https://github.com/VertigoJang/konvin.git
 cd konvin
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-gui.txt
+./install.sh
 ```
 
-### Debian / Ubuntu
+Python 가상 환경과 필요한 패키지는 처음 실행할 때 알아서 준비됩니다.
+관리자 권한은 필요하지 않으며, 모든 파일은 홈 디렉터리 안에만 설치됩니다.
+
+> Python 3.10 이상이 필요합니다. 대부분의 배포판에는 이미 들어 있습니다.
+
+### 3. 실행
 
 ```bash
-sudo apt install python3 python3-venv ffmpeg
-git clone https://github.com/VertigoJang/konvin.git
-cd konvin
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-gui.txt
+konvin
 ```
 
-### Fedora
+앱 메뉴에서 **Konvin** 을 찾아 실행해도 됩니다.
+
+터미널에서 `konvin` 명령을 찾지 못한다면 아래 줄을 `~/.bashrc` 또는 `~/.zshrc` 에
+추가하고 터미널을 새로 열어 주세요.
 
 ```bash
-sudo dnf install python3 ffmpeg
-git clone https://github.com/VertigoJang/konvin.git
-cd konvin
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-gui.txt
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## 실행
+### 제거
 
 ```bash
-source .venv/bin/activate
-python scripts/konvin.py
+./install.sh --remove
 ```
 
-명령줄만 쓰고 싶다면:
-
-```bash
-python scripts/ipodsync.py
-```
+받아 둔 영상과 설정은 `~/Konvin` 에 그대로 남습니다. 필요 없으면 직접 지우면 됩니다.
 
 ## 파일이 저장되는 곳
 
@@ -110,13 +104,13 @@ python scripts/ipodsync.py
 | `changedv` | **변환이 끝난 영상 — 아이팟에 넣을 파일** |
 | `archivev` | 변환 후 보관된 원본 |
 
-`download_archive.txt`에 이미 받은 영상의 목록이, `config.json`에 설정이 저장됩니다.
-프로그램의 설정 › 정리 탭에서 쌓인 파일을 지울 수 있습니다.
+`download_archive.txt` 에 이미 받은 영상의 목록이, `config.json` 에 설정이 저장됩니다.
+프로그램의 **설정 › 정리** 탭에서 쌓인 파일을 지울 수 있습니다.
 
 ## 버그 신고
 
 [GitHub Issues](https://github.com/VertigoJang/konvin/issues)에 남겨 주세요.
-프로그램의 "로그 보기"를 눌러서 나오는 내용을 함께 보내 주시면 원인을 찾는 데 큰 도움이 됩니다.
+프로그램의 **로그 보기** 를 눌러서 나오는 내용을 함께 보내 주시면 원인을 찾는 데 큰 도움이 됩니다.
 
 ## 후원
 
@@ -166,19 +160,20 @@ high audio for a music video, or the other way round.
 
 ### Install
 
-Requires Python 3.10+, ffmpeg, yt-dlp and PySide6.
+Install ffmpeg through your distribution's package manager first, then:
 
 ```bash
 git clone https://github.com/VertigoJang/konvin.git
 cd konvin
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-gui.txt
-python scripts/konvin.py
+./install.sh
+konvin
 ```
 
-Install ffmpeg through your distribution's package manager first
-(`pacman -S ffmpeg`, `apt install ffmpeg`, `dnf install ffmpeg`).
+The Python virtual environment and its packages are set up automatically on
+first run. No root access needed — everything is installed under your home
+directory. Requires Python 3.10 or newer.
+
+To uninstall: `./install.sh --remove`
 
 ### Where files go
 
@@ -188,7 +183,7 @@ iPod — end up in `changedv`.
 ### Bugs
 
 Please open an issue on [GitHub](https://github.com/VertigoJang/konvin/issues).
-Including the output from "Show log" helps a great deal.
+Including the output from **Show log** helps a great deal.
 
 ### License
 
