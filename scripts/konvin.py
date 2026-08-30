@@ -1794,6 +1794,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
+    app.setDesktopFileName("konvin")
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
