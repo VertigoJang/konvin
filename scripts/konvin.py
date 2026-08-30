@@ -2,8 +2,8 @@
 
 # ============================================
 # Konvin
-# Version : v2.6
-# Codename: Crossing
+# Version : v2.7
+# Codename: Fetch
 #
 # Copyright (c) 2026 장현기 (VertigoJang)
 # MIT License — see LICENSE
@@ -11,14 +11,20 @@
 # ============================================
 
 import json
+import os
+import platform
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+import urllib.request
+import zipfile
 from collections import deque
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, Qt, QUrl
+from PySide6.QtCore import QObject, QProcess, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -48,8 +54,8 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v2.6"
-CODENAME = "Crossing"
+VERSION  = "v2.7"
+CODENAME = "Fetch"
 
 AUTHOR     = "장현기 (VertigoJang)"
 COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
@@ -59,6 +65,7 @@ DONATE_URL = "https://buymeacoffee.com/iputaspellonyou"
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS   = sys.platform == "darwin"
+IS_ARM     = platform.machine().lower() in ("arm64", "aarch64")
 
 
 def default_base():
@@ -82,15 +89,14 @@ TEMPV     = BASE / "tempv"
 CHANGEDV  = BASE / "changedv"
 ARCHIVEV  = BASE / "archivev"
 PLAYLISTV = BASE / "playlistv"
+BIN_DIR   = BASE / "bin"
 
 ARCHIVE_FILE = BASE / "download_archive.txt"
 CONFIG_FILE  = BASE / "config.json"
 
-# 예전 버전이 쓰던 위치들
 LEGACY_BASES = [Path.home() / "iPodSync"]
 
 if IS_WINDOWS:
-    # v2.5 까지는 윈도우에서도 홈 바로 아래에 두었다
     LEGACY_BASES.append(Path.home() / APP_NAME)
 
 
@@ -109,10 +115,7 @@ def migrate_legacy_base():
         return
 
     for legacy in LEGACY_BASES:
-        if legacy == BASE:
-            continue
-
-        if not looks_like_workspace(legacy):
+        if legacy == BASE or not looks_like_workspace(legacy):
             continue
 
         try:
@@ -126,33 +129,112 @@ def migrate_legacy_base():
 
 migrate_legacy_base()
 
-for _d in (TEMPV, CHANGEDV, ARCHIVEV, PLAYLISTV):
+for _d in (TEMPV, CHANGEDV, ARCHIVEV, PLAYLISTV, BIN_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 VALID_EXTENSIONS = [".webm", ".mkv", ".mp4", ".avi", ".mov"]
 OUTPUT_EXTENSIONS = [".m4v"]
 
 
+# ============================================
+# 외부 도구 찾기
+# ============================================
+
+def tool_filename(name):
+    return f"{name}.exe" if IS_WINDOWS else name
+
+
 def find_tool(name):
-    """PATH 에서 먼저 찾고, 없으면 리포의 venv 안을 본다."""
+    """PATH → 내려받은 bin 폴더 → 리포의 venv 순으로 찾는다."""
     found = shutil.which(name)
 
     if found:
         return found
 
-    root = Path(__file__).resolve().parent.parent
+    local = BIN_DIR / tool_filename(name)
 
-    if IS_WINDOWS:
-        candidate = root / ".venv" / "Scripts" / f"{name}.exe"
-    else:
-        candidate = root / ".venv" / "bin" / name
+    if local.exists():
+        return str(local)
+
+    root = Path(__file__).resolve().parent.parent
+    venv_bin = root / ".venv" / ("Scripts" if IS_WINDOWS else "bin")
+    candidate = venv_bin / tool_filename(name)
 
     return str(candidate) if candidate.exists() else name
+
+
+def tool_available(path):
+    """실행 가능한 실제 경로인지 확인."""
+    return os.path.sep in path or os.path.isfile(path)
 
 
 YTDLP   = find_tool("yt-dlp")
 FFMPEG  = find_tool("ffmpeg")
 FFPROBE = find_tool("ffprobe")
+
+
+def refresh_tools():
+    global YTDLP, FFMPEG, FFPROBE
+    YTDLP   = find_tool("yt-dlp")
+    FFMPEG  = find_tool("ffmpeg")
+    FFPROBE = find_tool("ffprobe")
+
+
+def ffmpeg_ready():
+    return tool_available(FFMPEG) and tool_available(FFPROBE)
+
+
+# ffmpeg 내려받기 출처. 모두 정적 빌드이며 GPL 라이선스다.
+FFMPEG_SOURCES = {
+    "windows": {
+        "url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+        "kind": "zip",
+        "home": "https://www.gyan.dev/ffmpeg/builds/",
+        "credit": "gyan.dev",
+    },
+    "linux": {
+        "url": "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz",
+        "kind": "tar",
+        "home": "https://johnvansickle.com/ffmpeg/",
+        "credit": "John Van Sickle",
+    },
+    "macos": {
+        "url": "https://evermeet.cx/ffmpeg/getrelease/zip",
+        "extra_urls": ["https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip"],
+        "kind": "zip",
+        "home": "https://evermeet.cx/ffmpeg/",
+        "credit": "Helmut K. C. Tessarek",
+    },
+}
+
+
+def ffmpeg_source():
+    """이 환경에서 쓸 수 있는 내려받기 출처. 없으면 None."""
+    if IS_WINDOWS:
+        return FFMPEG_SOURCES["windows"]
+
+    if IS_MACOS:
+        # 애플 실리콘용 정적 빌드는 안정적인 고정 주소가 없어 Homebrew 를 안내한다
+        return None if IS_ARM else FFMPEG_SOURCES["macos"]
+
+    return None if IS_ARM else FFMPEG_SOURCES["linux"]
+
+
+def package_manager_hint():
+    """플랫폼별 권장 설치 명령."""
+    if IS_WINDOWS:
+        return "winget install Gyan.FFmpeg"
+
+    if IS_MACOS:
+        return "brew install ffmpeg"
+
+    return (
+        "Arch      : sudo pacman -S ffmpeg\n"
+        "Debian    : sudo apt install ffmpeg\n"
+        "Fedora    : sudo dnf install ffmpeg\n"
+        "openSUSE  : sudo zypper install ffmpeg"
+    )
+
 
 # iPod Classic 5G: H.264 Baseline Profile Level 3.0, 320x240, 768kbps ceiling
 VIDEO_PROFILES = {
@@ -232,7 +314,6 @@ TEXTS = {
         "no_files":       "변환할 파일이 없습니다.",
         "no_new_files":   "변환할 새 파일이 없습니다.",
         "closing":        "작업이 진행 중입니다. 종료할까요?",
-        "no_ffmpeg":      "ffmpeg 를 찾을 수 없습니다. 설치한 뒤 다시 실행해 주세요.",
 
         "video_low":      "낮음 (384k)",
         "video_medium":   "보통 (700k)",
@@ -286,6 +367,7 @@ TEXTS = {
         "path_playlistv": "재생목록으로 받은 원본이 임시로 저장됩니다.",
         "path_changedv":  "변환이 끝난 영상이 저장됩니다. 아이팟에 넣을 파일입니다.",
         "path_archivev":  "변환이 끝난 뒤 원본이 이곳으로 옮겨집니다.",
+        "path_bin":       "직접 내려받은 ffmpeg 가 여기에 저장됩니다.",
         "path_archive_file": "이미 받은 영상의 목록입니다. 같은 영상을 두 번 받지 않게 합니다.",
         "path_config":    "언어와 화질 설정이 저장됩니다.",
 
@@ -302,6 +384,36 @@ TEXTS = {
         "about_license_full":  "라이선스 전문",
         "about_thirdparty":    "이 프로그램은 yt-dlp와 ffmpeg를 사용합니다. "
                                "각각의 라이선스는 해당 프로젝트를 따릅니다.",
+
+        # ffmpeg 설치 안내
+        "ffmpeg_title":   "ffmpeg 가 필요합니다",
+        "ffmpeg_intro":
+            "영상을 변환하려면 ffmpeg 가 필요합니다. 아직 이 컴퓨터에서 찾을 수 "
+            "없습니다.",
+        "ffmpeg_manual":  "패키지 관리자로 설치 (권장)",
+        "ffmpeg_manual_hint":
+            "아래 명령으로 설치한 뒤 이 프로그램을 다시 실행하면 됩니다.",
+        "ffmpeg_auto":    "직접 내려받기",
+        "ffmpeg_auto_hint":
+            "{credit} 에서 배포하는 정적 빌드를 받아 {path} 에 저장합니다. "
+            "이 프로그램에는 ffmpeg 가 포함되어 있지 않으며, 내려받기는 사용자의 "
+            "선택으로 이루어집니다.",
+        "ffmpeg_license_notice":
+            "ffmpeg 는 GPL 라이선스로 배포됩니다. 자세한 내용과 소스 코드는 "
+            "ffmpeg.org 및 배포처에서 확인할 수 있습니다.",
+        "ffmpeg_download":     "지금 내려받기",
+        "ffmpeg_open_source":  "배포처 열기",
+        "ffmpeg_downloading":  "내려받는 중... {percent}%",
+        "ffmpeg_extracting":   "압축을 푸는 중...",
+        "ffmpeg_done":         "ffmpeg 준비가 끝났습니다.",
+        "ffmpeg_error":        "내려받기에 실패했습니다: {error}",
+        "ffmpeg_unavailable":
+            "이 환경에서는 자동 내려받기를 지원하지 않습니다. "
+            "위 명령으로 직접 설치해 주세요.",
+        "ffmpeg_later":        "나중에",
+        "ffmpeg_missing_run":
+            "ffmpeg 를 찾을 수 없어 변환을 시작할 수 없습니다. "
+            "설정 창을 열어 설치를 진행해 주세요.",
     },
     "en": {
         "language_name":  "English",
@@ -333,7 +445,6 @@ TEXTS = {
         "no_files":       "No files to convert.",
         "no_new_files":   "No new files to convert.",
         "closing":        "A task is running. Quit anyway?",
-        "no_ffmpeg":      "ffmpeg was not found. Please install it and try again.",
 
         "video_low":      "Low (384k)",
         "video_medium":   "Medium (700k)",
@@ -387,6 +498,7 @@ TEXTS = {
         "path_playlistv": "Originals downloaded from playlists are stored here.",
         "path_changedv":  "Converted videos land here. These are the files for your iPod.",
         "path_archivev":  "Originals move here once conversion succeeds.",
+        "path_bin":       "ffmpeg downloaded through this program is stored here.",
         "path_archive_file": "A list of videos already downloaded, so the same one isn't fetched twice.",
         "path_config":    "Your language and quality settings are stored here.",
 
@@ -403,6 +515,34 @@ TEXTS = {
         "about_license_full":  "Full license text",
         "about_thirdparty":    "This program uses yt-dlp and ffmpeg. Each is covered "
                                "by its own license.",
+
+        "ffmpeg_title":   "ffmpeg is required",
+        "ffmpeg_intro":
+            "Converting video requires ffmpeg, which wasn't found on this computer.",
+        "ffmpeg_manual":  "Install with a package manager (recommended)",
+        "ffmpeg_manual_hint":
+            "Run the command below, then start this program again.",
+        "ffmpeg_auto":    "Download it here",
+        "ffmpeg_auto_hint":
+            "Fetches the static build published by {credit} and stores it in {path}. "
+            "ffmpeg is not bundled with this program — the download happens only if "
+            "you choose it.",
+        "ffmpeg_license_notice":
+            "ffmpeg is distributed under the GPL. Details and source code are "
+            "available from ffmpeg.org and the build provider.",
+        "ffmpeg_download":     "Download now",
+        "ffmpeg_open_source":  "Open provider page",
+        "ffmpeg_downloading":  "Downloading... {percent}%",
+        "ffmpeg_extracting":   "Extracting...",
+        "ffmpeg_done":         "ffmpeg is ready.",
+        "ffmpeg_error":        "Download failed: {error}",
+        "ffmpeg_unavailable":
+            "Automatic download isn't available on this platform. "
+            "Please install ffmpeg using the command above.",
+        "ffmpeg_later":        "Later",
+        "ffmpeg_missing_run":
+            "ffmpeg was not found, so conversion cannot start. "
+            "Open Settings to install it.",
     },
 }
 
@@ -463,6 +603,12 @@ HELP_SECTIONS = {
 
         ("저장 폴더 열기",
          "변환이 끝난 영상이 담긴 폴더를 파일 관리자로 엽니다."),
+
+        ("ffmpeg 에 대하여",
+         "영상 변환은 ffmpeg 라는 별도 프로그램이 담당합니다. 이 프로그램에는 "
+         "포함되어 있지 않으므로, 컴퓨터에 없다면 처음 실행할 때 설치 방법을 "
+         "안내합니다. 패키지 관리자로 직접 설치하거나, 안내 창에서 내려받기를 "
+         "선택할 수 있습니다."),
 
         ("설정 › 정리",
          "폴더에 쌓인 영상 파일을 지웁니다. 폴더를 고르면 파일 목록과 전체 용량이 "
@@ -531,6 +677,12 @@ HELP_SECTIONS = {
 
         ("Open output folder",
          "Opens the folder holding your converted videos in the file manager."),
+
+        ("About ffmpeg",
+         "The actual conversion is done by a separate program called ffmpeg, which "
+         "is not bundled here. If it isn't on your computer, you'll be shown how to "
+         "install it on first run — either through your package manager or by "
+         "choosing to download it from the dialog."),
 
         ("Settings › Cleanup",
          "Deletes video files that have piled up. Pick a folder to see its contents "
@@ -763,6 +915,257 @@ def build_ffmpeg_args(source, dest, video_quality, audio_quality):
         "-f", "mp4",
         str(dest),
     ]
+
+
+# ============================================
+# ffmpeg 내려받기
+# ============================================
+
+class FFmpegDownloader(QObject):
+    """별도 스레드에서 ffmpeg 정적 빌드를 받아 BIN_DIR 에 넣는다."""
+
+    progress = Signal(int)
+    extracting = Signal()
+    finished = Signal(bool, str)
+
+    WANTED = ("ffmpeg", "ffprobe")
+
+    def __init__(self, source):
+        super().__init__()
+        self.source = source
+
+    def run(self):
+        urls = [self.source["url"]] + list(self.source.get("extra_urls", []))
+
+        try:
+            with tempfile.TemporaryDirectory() as workdir:
+                work = Path(workdir)
+                archives = []
+
+                for index, url in enumerate(urls):
+                    target = work / f"download-{index}"
+                    self._fetch(url, target, index, len(urls))
+                    archives.append(target)
+
+                self.extracting.emit()
+
+                extracted = work / "extracted"
+                extracted.mkdir()
+
+                for archive in archives:
+                    self._extract(archive, extracted)
+
+                found = self._collect(extracted)
+
+                if not found:
+                    self.finished.emit(False, "ffmpeg not found in archive")
+                    return
+
+                for name, path in found.items():
+                    dest = BIN_DIR / tool_filename(name)
+                    shutil.copy2(path, dest)
+
+                    if not IS_WINDOWS:
+                        dest.chmod(0o755)
+
+        except Exception as e:  # 네트워크·압축 등 어떤 실패든 사용자에게 알린다
+            self.finished.emit(False, str(e))
+            return
+
+        self.finished.emit(True, "")
+
+    def _fetch(self, url, target, index, total):
+        request = urllib.request.Request(
+            url, headers={"User-Agent": f"{APP_NAME}/{VERSION}"}
+        )
+
+        with urllib.request.urlopen(request, timeout=30) as response:
+            length = response.getheader("Content-Length")
+            length = int(length) if length and length.isdigit() else 0
+            read = 0
+
+            with open(target, "wb") as out:
+                while True:
+                    chunk = response.read(65536)
+
+                    if not chunk:
+                        break
+
+                    out.write(chunk)
+                    read += len(chunk)
+
+                    if length:
+                        base = index / total * 100
+                        self.progress.emit(int(base + read / length * 100 / total))
+
+    def _extract(self, archive, destination):
+        if zipfile.is_zipfile(archive):
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(destination)
+            return
+
+        with tarfile.open(archive) as tf:
+            tf.extractall(destination)
+
+    def _collect(self, root):
+        found = {}
+
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+
+            stem = path.stem.lower()
+
+            if stem in self.WANTED and stem not in found:
+                found[stem] = path
+
+        return found
+
+
+class FFmpegSetupDialog(QDialog):
+    """ffmpeg 설치 안내 창."""
+
+    def __init__(self, parent, texts):
+        super().__init__(parent)
+        self.texts = texts
+        self.thread = None
+        self.worker = None
+
+        self.setWindowTitle(texts["ffmpeg_title"])
+        self.setMinimumWidth(560)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        intro = QLabel(texts["ffmpeg_intro"])
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        # --- 패키지 관리자 안내 ---
+        manual_box = QGroupBox(texts["ffmpeg_manual"])
+        manual_layout = QVBoxLayout(manual_box)
+
+        hint = QLabel(texts["ffmpeg_manual_hint"])
+        hint.setWordWrap(True)
+        manual_layout.addWidget(hint)
+
+        command = QPlainTextEdit(package_manager_hint())
+        command.setReadOnly(True)
+        command.setFont(QFont("monospace", 9))
+        command.setFixedHeight(24 + 16 * package_manager_hint().count("\n"))
+        manual_layout.addWidget(command)
+
+        layout.addWidget(manual_box)
+
+        # --- 직접 내려받기 ---
+        self.source = ffmpeg_source()
+
+        auto_box = QGroupBox(texts["ffmpeg_auto"])
+        auto_layout = QVBoxLayout(auto_box)
+
+        if self.source:
+            auto_hint = QLabel(
+                texts["ffmpeg_auto_hint"].format(
+                    credit=self.source["credit"], path=BIN_DIR
+                )
+            )
+        else:
+            auto_hint = QLabel(texts["ffmpeg_unavailable"])
+
+        auto_hint.setWordWrap(True)
+        auto_layout.addWidget(auto_hint)
+
+        notice = QLabel(texts["ffmpeg_license_notice"])
+        notice.setWordWrap(True)
+        notice.setStyleSheet("color: gray;")
+        auto_layout.addWidget(notice)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setVisible(False)
+        auto_layout.addWidget(self.progress_bar)
+
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        auto_layout.addWidget(self.status_label)
+
+        button_row = QHBoxLayout()
+
+        self.download_button = QPushButton(texts["ffmpeg_download"])
+        self.download_button.clicked.connect(self.start_download)
+        self.download_button.setEnabled(bool(self.source))
+        button_row.addWidget(self.download_button)
+
+        if self.source:
+            provider_button = QPushButton(texts["ffmpeg_open_source"])
+            provider_button.clicked.connect(
+                lambda: open_url(self.source["home"])
+            )
+            button_row.addWidget(provider_button)
+
+        button_row.addStretch()
+        auto_layout.addLayout(button_row)
+
+        layout.addWidget(auto_box)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.Close).setText(texts["ffmpeg_later"])
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.close_button = buttons.button(QDialogButtonBox.Close)
+
+    def start_download(self):
+        if not self.source:
+            return
+
+        self.download_button.setEnabled(False)
+        self.close_button.setEnabled(False)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(True)
+        self.status_label.setText(
+            self.texts["ffmpeg_downloading"].format(percent=0)
+        )
+
+        self.thread = QThread(self)
+        self.worker = FFmpegDownloader(self.source)
+        self.worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self.on_progress)
+        self.worker.extracting.connect(self.on_extracting)
+        self.worker.finished.connect(self.on_finished)
+
+        self.thread.start()
+
+    def on_progress(self, percent):
+        self.progress_bar.setValue(percent)
+        self.status_label.setText(
+            self.texts["ffmpeg_downloading"].format(percent=percent)
+        )
+
+    def on_extracting(self):
+        self.progress_bar.setValue(100)
+        self.status_label.setText(self.texts["ffmpeg_extracting"])
+
+    def on_finished(self, ok, error):
+        self.thread.quit()
+        self.thread.wait()
+        self.thread = None
+        self.worker = None
+
+        self.close_button.setEnabled(True)
+
+        if ok:
+            refresh_tools()
+            self.progress_bar.setVisible(False)
+            self.status_label.setText(self.texts["ffmpeg_done"])
+            self.accept()
+            return
+
+        self.progress_bar.setVisible(False)
+        self.status_label.setText(self.texts["ffmpeg_error"].format(error=error))
+        self.download_button.setEnabled(True)
 
 
 # ============================================
@@ -1108,12 +1511,14 @@ class SettingsDialog(QDialog):
         self.config = dict(config)
 
         texts = TEXTS[self.config["language"]]
+        self.texts = texts
         self.setWindowTitle(texts["settings_title"])
-        self.resize(580, 500)
+        self.resize(580, 520)
 
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
 
+        # --- 일반 ---
         general = QWidget()
         general_layout = QVBoxLayout(general)
         form = QFormLayout()
@@ -1128,11 +1533,28 @@ class SettingsDialog(QDialog):
 
         form.addRow(texts["language"], self.language_combo)
         general_layout.addLayout(form)
+
+        ffmpeg_box = QGroupBox("ffmpeg")
+        ffmpeg_layout = QVBoxLayout(ffmpeg_box)
+
+        self.ffmpeg_status = QLabel("")
+        self.ffmpeg_status.setWordWrap(True)
+        ffmpeg_layout.addWidget(self.ffmpeg_status)
+
+        self.ffmpeg_button = QPushButton(texts["ffmpeg_title"])
+        self.ffmpeg_button.clicked.connect(self.open_ffmpeg_setup)
+        ffmpeg_layout.addWidget(self.ffmpeg_button)
+
+        general_layout.addWidget(ffmpeg_box)
         general_layout.addStretch()
         tabs.addTab(general, texts["tab_general"])
 
+        self.update_ffmpeg_status()
+
+        # --- 정리 ---
         tabs.addTab(CleanupTab(self, texts), texts["tab_cleanup"])
 
+        # --- 폴더 위치 ---
         paths = QWidget()
         paths_outer = QVBoxLayout(paths)
 
@@ -1147,6 +1569,7 @@ class SettingsDialog(QDialog):
             ("playlistv", PLAYLISTV, "path_playlistv"),
             ("changedv", CHANGEDV, "path_changedv"),
             ("archivev", ARCHIVEV, "path_archivev"),
+            ("bin", BIN_DIR, "path_bin"),
             ("download_archive.txt", ARCHIVE_FILE, "path_archive_file"),
             ("config.json", CONFIG_FILE, "path_config"),
         )
@@ -1169,6 +1592,7 @@ class SettingsDialog(QDialog):
         paths_outer.addWidget(scroll)
         tabs.addTab(paths, texts["tab_paths"])
 
+        # --- 정보 ---
         about_scroll = QScrollArea()
         about_scroll.setWidgetResizable(True)
         about_scroll.setWidget(AboutTab(self, texts))
@@ -1180,6 +1604,20 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def update_ffmpeg_status(self):
+        if ffmpeg_ready():
+            self.ffmpeg_status.setText(f"{FFMPEG}")
+            self.ffmpeg_status.setStyleSheet("color: gray;")
+            self.ffmpeg_button.setVisible(False)
+        else:
+            self.ffmpeg_status.setText(self.texts["ffmpeg_intro"])
+            self.ffmpeg_status.setStyleSheet("")
+            self.ffmpeg_button.setVisible(True)
+
+    def open_ffmpeg_setup(self):
+        FFmpegSetupDialog(self, self.texts).exec()
+        self.update_ffmpeg_status()
 
     def result_config(self):
         return {"language": self.language_combo.currentData()}
@@ -1373,6 +1811,17 @@ class MainWindow(QMainWindow):
         self.tray.show()
 
     # --------------------------------------------
+    # 첫 실행 점검
+    # --------------------------------------------
+
+    def check_ffmpeg(self):
+        """ffmpeg 가 없으면 설치 안내 창을 띄운다."""
+        if ffmpeg_ready():
+            return
+
+        FFmpegSetupDialog(self, TEXTS[self.config["language"]]).exec()
+
+    # --------------------------------------------
     # 언어 적용
     # --------------------------------------------
 
@@ -1539,11 +1988,28 @@ class MainWindow(QMainWindow):
     # 실행
     # --------------------------------------------
 
+    def require_ffmpeg(self):
+        if ffmpeg_ready():
+            return True
+
+        answer = QMessageBox.warning(
+            self,
+            APP_NAME,
+            self.tr_("ffmpeg_missing_run"),
+            QMessageBox.Ok,
+        )
+
+        FFmpegSetupDialog(self, TEXTS[self.config["language"]]).exec()
+        return ffmpeg_ready()
+
     def start_download(self):
         urls = self.queued_urls()
 
         if not urls:
             QMessageBox.information(self, APP_NAME, self.tr_("no_url"))
+            return
+
+        if not self.require_ffmpeg():
             return
 
         self.stopping = False
@@ -1563,6 +2029,9 @@ class MainWindow(QMainWindow):
 
         if not files:
             QMessageBox.information(self, APP_NAME, self.tr_("no_files"))
+            return
+
+        if not self.require_ffmpeg():
             return
 
         self.stopping = False
@@ -1728,10 +2197,6 @@ class MainWindow(QMainWindow):
         if error == QProcess.FailedToStart:
             name = "yt-dlp" if self.stage == "download" else "ffmpeg"
             self.log(f"{name}: failed to start")
-
-            if name == "ffmpeg":
-                QMessageBox.warning(self, APP_NAME, self.tr_("no_ffmpeg"))
-
             self.cleanup_temp()
             self.finish()
 
@@ -1872,8 +2337,11 @@ def main():
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setDesktopFileName("konvin")
+
     window = MainWindow()
     window.show()
+    window.check_ffmpeg()
+
     sys.exit(app.exec())
 
 
