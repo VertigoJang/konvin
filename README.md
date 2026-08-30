@@ -10,6 +10,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+<img src="assets/screenshot.png" width="700" alt="Konvin">
+
 </div>
 
 ---
