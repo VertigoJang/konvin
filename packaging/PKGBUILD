@@ -1,0 +1,47 @@
+# Maintainer: VertigoJang <https://github.com/VertigoJang>
+
+pkgname=konvin
+pkgver=2.5
+pkgrel=1
+pkgdesc="Turns YouTube videos into something a click-wheel iPod can play"
+arch=('any')
+url="https://github.com/VertigoJang/konvin"
+license=('MIT')
+depends=(
+    'python'
+    'pyside6'
+    'yt-dlp'
+    'ffmpeg'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('6347fbf50dd07456f6bad992d92c4aa5d972c7c8ced885a6cdc64c35cd9326ed')
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+
+    # 본체
+    install -Dm644 scripts/konvin.py "$pkgdir/usr/lib/$pkgname/konvin.py"
+
+    # 실행 명령 (시스템 파이썬 사용, venv 없음)
+    install -dm755 "$pkgdir/usr/bin"
+    cat > "$pkgdir/usr/bin/$pkgname" <<'EOF'
+#!/usr/bin/env bash
+exec python /usr/lib/konvin/konvin.py "$@"
+EOF
+    chmod 755 "$pkgdir/usr/bin/$pkgname"
+
+    # 앱 메뉴 등록 (Exec 을 설치 경로로 치환)
+    install -dm755 "$pkgdir/usr/share/applications"
+    sed "s|^Exec=konvin$|Exec=/usr/bin/konvin|" konvin.desktop \
+        > "$pkgdir/usr/share/applications/$pkgname.desktop"
+
+    # 아이콘
+    install -Dm644 assets/konvin.png \
+        "$pkgdir/usr/share/icons/hicolor/512x512/apps/$pkgname.png"
+
+    # 라이선스
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # 문서
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
