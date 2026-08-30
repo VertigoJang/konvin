@@ -2,8 +2,8 @@
 
 # ============================================
 # Konvin
-# Version : v2.7
-# Codename: Fetch
+# Version : v2.8
+# Codename: Lineage
 #
 # Copyright (c) 2026 장현기 (VertigoJang)
 # MIT License — see LICENSE
@@ -54,8 +54,8 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v2.7.1"
-CODENAME = "Fetch"
+VERSION  = "v2.8"
+CODENAME = "Lineage"
 
 AUTHOR     = "장현기 (VertigoJang)"
 COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
@@ -184,24 +184,20 @@ def ffmpeg_ready():
     return tool_available(FFMPEG) and tool_available(FFPROBE)
 
 
-# ffmpeg 내려받기 출처. 모두 정적 빌드이며 GPL 라이선스다.
 FFMPEG_SOURCES = {
     "windows": {
         "url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
-        "kind": "zip",
         "home": "https://www.gyan.dev/ffmpeg/builds/",
         "credit": "gyan.dev",
     },
     "linux": {
         "url": "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz",
-        "kind": "tar",
         "home": "https://johnvansickle.com/ffmpeg/",
         "credit": "John Van Sickle",
     },
     "macos": {
         "url": "https://evermeet.cx/ffmpeg/getrelease/zip",
         "extra_urls": ["https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip"],
-        "kind": "zip",
         "home": "https://evermeet.cx/ffmpeg/",
         "credit": "Helmut K. C. Tessarek",
     },
@@ -221,7 +217,6 @@ def ffmpeg_source():
 
 
 def package_manager_hint():
-    """플랫폼별 권장 설치 명령."""
     if IS_WINDOWS:
         return "winget install Gyan.FFmpeg"
 
@@ -236,25 +231,54 @@ def package_manager_hint():
     )
 
 
-# iPod Classic 5G: H.264 Baseline Profile Level 3.0, 320x240, 768kbps ceiling
-VIDEO_PROFILES = {
-    "low":    {"vb": "384k", "maxrate": "512k", "bufsize": "1024k"},
-    "medium": {"vb": "700k", "maxrate": "768k", "bufsize": "1536k"},
-    "high":   {"vb": "768k", "maxrate": "768k", "bufsize": "1536k"},
+# ============================================
+# 기기 세대별 인코딩 사양
+#
+# 클릭휠 아이팟은 세대마다 디코딩할 수 있는 H.264 레벨과 비트레이트 상한이
+# 다르다. 액정은 모두 320x240 이지만 5.5세대부터는 640x480 까지 디코딩할 수
+# 있어, TV 출력을 쓰거나 원본을 덜 깎고 싶을 때 의미가 있다.
+# ============================================
+
+DEVICE_PROFILES = {
+    "5g": {
+        "level": "1.3",
+        "width": 320,
+        "height": 240,
+        "source_height": 480,
+        "video_bitrates": {"low": 384, "medium": 600, "high": 768},
+    },
+    "5.5g": {
+        "level": "2.0",
+        "width": 640,
+        "height": 480,
+        "source_height": 720,
+        "video_bitrates": {"low": 700, "medium": 1100, "high": 1500},
+    },
+    "classic": {
+        "level": "3.0",
+        "width": 640,
+        "height": 480,
+        "source_height": 720,
+        # 상한은 2500 이지만 꽉 채우면 발열과 배터리 소모가 크다.
+        # 실사용 권장값인 1500 을 보통으로 둔다.
+        "video_bitrates": {"low": 900, "medium": 1500, "high": 2500},
+    },
 }
 
-AUDIO_PROFILES = {
-    "low":    {"ab": "96k"},
-    "medium": {"ab": "128k"},
-    "high":   {"ab": "160k"},
-}
+AUDIO_BITRATES = {"low": 96, "medium": 128, "high": 160}
 
-DEFAULT_VIDEO = "medium"
-DEFAULT_AUDIO = "medium"
+VIDEO_CODECS = ("h264", "mpeg4")
+ASPECT_MODES = ("letterbox", "preserve")
+
+DEFAULT_DEVICE   = "5g"
+DEFAULT_VIDEO    = "medium"
+DEFAULT_AUDIO    = "medium"
+DEFAULT_CODEC    = "h264"
+DEFAULT_ASPECT   = "letterbox"
 DEFAULT_LANGUAGE = "ko"
 
-COLLAPSED_HEIGHT = 360
-EXPANDED_HEIGHT  = 680
+COLLAPSED_HEIGHT = 380
+EXPANDED_HEIGHT  = 700
 
 MIT_LICENSE = f"""MIT License
 
@@ -289,6 +313,7 @@ TEXTS = {
         "queue":          "대기열",
         "single_video":   "단일 영상",
         "playlist":       "재생목록",
+        "device":         "기기:",
         "video_quality":  "영상:",
         "audio_quality":  "소리:",
         "url_hint":       "유튜브 주소",
@@ -315,16 +340,24 @@ TEXTS = {
         "no_new_files":   "변환할 새 파일이 없습니다.",
         "closing":        "작업이 진행 중입니다. 종료할까요?",
 
-        "video_low":      "낮음 (384k)",
-        "video_medium":   "보통 (700k)",
-        "video_high":     "높음 (768k)",
-        "audio_low":      "낮음 (96k)",
-        "audio_medium":   "보통 (128k)",
-        "audio_high":     "높음 (160k)",
+        "device_5g":      "5세대 (2005)",
+        "device_5.5g":    "5.5세대 (2006)",
+        "device_classic": "6·7세대 클래식",
+        "device_5g_tip":
+            "iPod with Video. 최대 320×240, 768kbps 까지 재생합니다.",
+        "device_5.5g_tip":
+            "화면이 밝아진 후기형. 최대 640×480, 1.5Mbps 까지 재생합니다.",
+        "device_classic_tip":
+            "iPod classic 80/120/160GB. 최대 640×480, 2.5Mbps 까지 재생합니다.",
+
+        "quality_low":    "낮음 ({kbps}k)",
+        "quality_medium": "보통 ({kbps}k)",
+        "quality_high":   "높음 ({kbps}k)",
 
         "language":       "언어:",
         "settings_title": "설정",
         "tab_general":    "일반",
+        "tab_encoding":   "변환",
         "tab_cleanup":    "정리",
         "tab_paths":      "폴더 위치",
         "tab_about":      "정보",
@@ -343,6 +376,22 @@ TEXTS = {
         "open_folder":    "저장 폴더 열기",
         "help_title":     f"{APP_NAME} 사용 설명",
         "close":          "닫기",
+
+        "aspect":            "화면 비율:",
+        "aspect_letterbox":  "화면 채우기 (위아래 검은 띠)",
+        "aspect_preserve":   "원본 비율 유지",
+        "aspect_hint":
+            "아이팟 액정은 4:3 입니다. 화면 채우기는 검은 띠를 넣어 4:3 으로 "
+            "맞추고, 원본 비율 유지는 띠 없이 원본 모양 그대로 둡니다. 어느 "
+            "쪽이든 기기에서 보이는 모습은 거의 같지만, 비율을 유지하면 파일이 "
+            "조금 작아집니다.",
+
+        "codec":          "영상 코덱:",
+        "codec_h264":     "H.264 (권장)",
+        "codec_mpeg4":    "MPEG-4 (호환용)",
+        "codec_hint":
+            "H.264 는 같은 용량에서 화질이 더 좋아 대부분의 경우 알맞습니다. "
+            "재생이 안 되는 파일이 있다면 MPEG-4 로 바꿔 보세요.",
 
         "cleanup_folder":  "폴더:",
         "cleanup_delete_selected": "선택 삭제",
@@ -369,7 +418,7 @@ TEXTS = {
         "path_archivev":  "변환이 끝난 뒤 원본이 이곳으로 옮겨집니다.",
         "path_bin":       "직접 내려받은 ffmpeg 가 여기에 저장됩니다.",
         "path_archive_file": "이미 받은 영상의 목록입니다. 같은 영상을 두 번 받지 않게 합니다.",
-        "path_config":    "언어와 화질 설정이 저장됩니다.",
+        "path_config":    "언어와 변환 설정이 저장됩니다.",
 
         "about_tagline":  "유튜브 영상을 클릭휠 아이팟에서 볼 수 있게 바꿔 줍니다.",
         "about_made_by":  "만든 사람: {author}",
@@ -385,7 +434,6 @@ TEXTS = {
         "about_thirdparty":    "이 프로그램은 yt-dlp와 ffmpeg를 사용합니다. "
                                "각각의 라이선스는 해당 프로젝트를 따릅니다.",
 
-        # ffmpeg 설치 안내
         "ffmpeg_title":   "ffmpeg 가 필요합니다",
         "ffmpeg_intro":
             "영상을 변환하려면 ffmpeg 가 필요합니다. 아직 이 컴퓨터에서 찾을 수 "
@@ -420,6 +468,7 @@ TEXTS = {
         "queue":          "Queue",
         "single_video":   "Single video",
         "playlist":       "Playlist",
+        "device":         "Device:",
         "video_quality":  "Video:",
         "audio_quality":  "Audio:",
         "url_hint":       "YouTube URL",
@@ -446,16 +495,24 @@ TEXTS = {
         "no_new_files":   "No new files to convert.",
         "closing":        "A task is running. Quit anyway?",
 
-        "video_low":      "Low (384k)",
-        "video_medium":   "Medium (700k)",
-        "video_high":     "High (768k)",
-        "audio_low":      "Low (96k)",
-        "audio_medium":   "Medium (128k)",
-        "audio_high":     "High (160k)",
+        "device_5g":      "5th gen (2005)",
+        "device_5.5g":    "5.5th gen (2006)",
+        "device_classic": "6th / 7th gen classic",
+        "device_5g_tip":
+            "iPod with Video. Plays up to 320x240 at 768 kbps.",
+        "device_5.5g_tip":
+            "The brighter late model. Plays up to 640x480 at 1.5 Mbps.",
+        "device_classic_tip":
+            "iPod classic 80/120/160GB. Plays up to 640x480 at 2.5 Mbps.",
+
+        "quality_low":    "Low ({kbps}k)",
+        "quality_medium": "Medium ({kbps}k)",
+        "quality_high":   "High ({kbps}k)",
 
         "language":       "Language:",
         "settings_title": "Settings",
         "tab_general":    "General",
+        "tab_encoding":   "Conversion",
         "tab_cleanup":    "Cleanup",
         "tab_paths":      "Folders",
         "tab_about":      "About",
@@ -474,6 +531,22 @@ TEXTS = {
         "open_folder":    "Open output folder",
         "help_title":     f"{APP_NAME} Guide",
         "close":          "Close",
+
+        "aspect":            "Aspect:",
+        "aspect_letterbox":  "Fill the screen (black bars)",
+        "aspect_preserve":   "Keep original shape",
+        "aspect_hint":
+            "The iPod screen is 4:3. Filling adds black bars to match it, while "
+            "keeping the original shape leaves the picture as it is. Either way "
+            "it looks much the same on the device, but keeping the shape makes "
+            "slightly smaller files.",
+
+        "codec":          "Video codec:",
+        "codec_h264":     "H.264 (recommended)",
+        "codec_mpeg4":    "MPEG-4 (compatibility)",
+        "codec_hint":
+            "H.264 gives better quality at the same size and suits almost every "
+            "case. If a file refuses to play, try MPEG-4 instead.",
 
         "cleanup_folder":  "Folder:",
         "cleanup_delete_selected": "Delete selected",
@@ -500,7 +573,7 @@ TEXTS = {
         "path_archivev":  "Originals move here once conversion succeeds.",
         "path_bin":       "ffmpeg downloaded through this program is stored here.",
         "path_archive_file": "A list of videos already downloaded, so the same one isn't fetched twice.",
-        "path_config":    "Your language and quality settings are stored here.",
+        "path_config":    "Your language and conversion settings are stored here.",
 
         "about_tagline":  "Turns YouTube videos into something a click-wheel iPod can play.",
         "about_made_by":  "Made by {author}",
@@ -549,22 +622,30 @@ TEXTS = {
 
 HELP_SECTIONS = {
     "ko": [
+        ("기기",
+         "가지고 있는 아이팟 세대를 고릅니다. 세대마다 재생할 수 있는 화면 크기와 "
+         "비트레이트 상한이 달라, 여기서 고른 값에 맞춰 나머지 설정이 자동으로 "
+         "정해집니다. 5세대는 320×240 까지, 5.5세대와 클래식은 640×480 까지 "
+         "재생합니다. 어느 세대든 액정 자체는 320×240 이므로, 큰 화면 크기는 "
+         "TV 출력으로 볼 때 의미가 있습니다. 잘 모르겠다면 5세대로 두면 모든 "
+         "기기에서 재생됩니다."),
+
         ("단일 영상 / 재생목록",
          "받으려는 주소의 종류를 고릅니다. 재생목록을 고르면 주소에 묶인 영상을 "
          "전부 받고, 파일 이름 앞에 001, 002 같은 순번이 붙습니다. 단일 영상을 "
          "고르면 주소에 재생목록이 섞여 있어도 영상 하나만 받습니다."),
 
         ("영상 / 소리",
-         "화면과 소리의 품질을 따로 고릅니다. 클릭휠 아이팟이 재생할 수 있는 범위 "
-         "안에서 각각 세 단계가 있고, 원하는 대로 조합할 수 있습니다. 음악 위주의 "
-         "영상이라면 영상을 낮게, 소리를 높게 두는 식입니다. 어느 쪽을 골라도 화면 "
-         "크기는 320×240으로 같으며, 여기서 고른 값은 이번에 처리할 파일 전체에 "
-         "적용됩니다."),
+         "화면과 소리의 품질을 따로 고릅니다. 고른 기기가 감당할 수 있는 범위 "
+         "안에서 세 단계가 주어지며, 괄호 안의 숫자가 실제 비트레이트입니다. "
+         "음악 위주의 영상이라면 영상을 낮게, 소리를 높게 두는 식으로 조합하면 "
+         "됩니다. 높음은 기기의 상한을 그대로 쓰기 때문에 배터리 소모와 발열이 "
+         "늘어납니다."),
 
         ("설정",
-         "언어를 바꾸고, 쌓인 파일을 정리하고, 폴더 위치와 프로그램 정보를 확인할 "
-         "수 있습니다. 바꾼 설정은 바로 적용되고 다음에 프로그램을 켤 때도 "
-         "유지됩니다."),
+         "언어와 변환 방식을 바꾸고, 쌓인 파일을 정리하고, 폴더 위치와 프로그램 "
+         "정보를 확인할 수 있습니다. 바꾼 설정은 바로 적용되고 다음에 프로그램을 "
+         "켤 때도 유지됩니다."),
 
         ("주소 입력칸 / 추가",
          "유튜브 주소를 붙여 넣고 추가를 누르면 아래 대기열에 쌓입니다. "
@@ -610,6 +691,12 @@ HELP_SECTIONS = {
          "안내합니다. 패키지 관리자로 직접 설치하거나, 안내 창에서 내려받기를 "
          "선택할 수 있습니다."),
 
+        ("설정 › 변환",
+         "화면 비율과 영상 코덱을 정합니다. 화면 채우기는 4:3 에 맞춰 위아래에 "
+         "검은 띠를 넣고, 원본 비율 유지는 띠 없이 원본 모양을 그대로 둡니다. "
+         "코덱은 H.264 가 기본이며, 재생이 안 되는 파일이 있을 때만 MPEG-4 로 "
+         "바꿔 보면 됩니다."),
+
         ("설정 › 정리",
          "폴더에 쌓인 영상 파일을 지웁니다. 폴더를 고르면 파일 목록과 전체 용량이 "
          "보이고, 필요한 것만 골라 지우거나 한 번에 비울 수 있습니다. 원본을 "
@@ -621,22 +708,29 @@ HELP_SECTIONS = {
          "후원 링크도 여기에 있습니다."),
     ],
     "en": [
+        ("Device",
+         "Pick the iPod generation you own. Each generation decodes a different "
+         "maximum picture size and bitrate, and the rest of the settings follow "
+         "from your choice. The 5th generation handles up to 320x240; the 5.5th "
+         "and the classic handle up to 640x480. Every one of them has a 320x240 "
+         "screen, so the larger sizes only matter for TV output. When in doubt, "
+         "leave it on 5th generation — those files play everywhere."),
+
         ("Single video / Playlist",
          "Choose what kind of link you're adding. Playlist downloads every video "
          "in the link and prefixes filenames with 001, 002 and so on. Single video "
          "grabs just the one video, even if the link also points at a playlist."),
 
         ("Video / Audio",
-         "Picture and sound quality are chosen separately. Each has three steps, "
-         "all within what a click-wheel iPod can play, and you can mix them "
-         "freely — low video with high audio suits a music video, for instance. "
-         "The picture size is 320x240 either way, and your choice applies to every "
-         "file in the current run."),
+         "Picture and sound quality are chosen separately, within what the selected "
+         "device can handle; the number in brackets is the actual bitrate. Low "
+         "video with high audio suits a music video, for instance. High uses the "
+         "device's ceiling, which drains the battery faster and runs warmer."),
 
         ("Settings",
-         "Change the language, clear out accumulated files, and see where things "
-         "are stored along with program information. Changes take effect "
-         "immediately and are remembered next time."),
+         "Change the language and conversion options, clear out accumulated files, "
+         "and see where things are stored along with program information. Changes "
+         "take effect immediately and are remembered next time."),
 
         ("URL box / Add",
          "Paste a YouTube link and press Add to put it in the queue below. Enter "
@@ -684,6 +778,12 @@ HELP_SECTIONS = {
          "install it on first run — either through your package manager or by "
          "choosing to download it from the dialog."),
 
+        ("Settings › Conversion",
+         "Sets the aspect handling and the video codec. Filling the screen adds "
+         "black bars to reach 4:3, while keeping the original shape leaves the "
+         "picture as it is. H.264 is the default codec; switch to MPEG-4 only if "
+         "a file refuses to play."),
+
         ("Settings › Cleanup",
          "Deletes video files that have piled up. Pick a folder to see its contents "
          "and total size, then remove individual files or empty it entirely. "
@@ -712,8 +812,11 @@ CLEANUP_FOLDERS = [
 
 def load_config():
     config = {
+        "device": DEFAULT_DEVICE,
         "video_quality": DEFAULT_VIDEO,
         "audio_quality": DEFAULT_AUDIO,
+        "codec": DEFAULT_CODEC,
+        "aspect": DEFAULT_ASPECT,
         "language": DEFAULT_LANGUAGE,
     }
 
@@ -725,15 +828,23 @@ def load_config():
     except (json.JSONDecodeError, OSError):
         return config
 
-    if data.get("video_quality") in VIDEO_PROFILES:
-        config["video_quality"] = data["video_quality"]
-    elif data.get("quality") in VIDEO_PROFILES:
-        config["video_quality"] = data["quality"]
+    if data.get("device") in DEVICE_PROFILES:
+        config["device"] = data["device"]
 
-    if data.get("audio_quality") in AUDIO_PROFILES:
-        config["audio_quality"] = data["audio_quality"]
-    elif data.get("quality") in AUDIO_PROFILES:
-        config["audio_quality"] = data["quality"]
+    for key, table in (
+        ("video_quality", AUDIO_BITRATES),
+        ("audio_quality", AUDIO_BITRATES),
+    ):
+        if data.get(key) in table:
+            config[key] = data[key]
+        elif data.get("quality") in table:
+            config[key] = data["quality"]
+
+    if data.get("codec") in VIDEO_CODECS:
+        config["codec"] = data["codec"]
+
+    if data.get("aspect") in ASPECT_MODES:
+        config["aspect"] = data["aspect"]
 
     if data.get("language") in TEXTS:
         config["language"] = data["language"]
@@ -864,14 +975,18 @@ def parse_ffmpeg_speed(line):
     return float(match.group(1)) if match else None
 
 
-def build_ytdlp_args(url, dest_dir, is_playlist):
+def build_ytdlp_args(url, dest_dir, is_playlist, device):
+    profile = DEVICE_PROFILES[device]
+    max_height = profile["source_height"]
+
     if is_playlist:
         template = str(dest_dir / "%(playlist_index|000)03d - %(title)s [%(id)s].%(ext)s")
     else:
         template = str(dest_dir / "%(title)s [%(id)s].%(ext)s")
 
     args = [
-        "-f", "bestvideo[height<=480]+bestaudio/best[height<=480]",
+        "-f",
+        f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]",
         "-o", template,
         "--no-overwrites",
         "--trim-filenames", "200",
@@ -893,26 +1008,59 @@ def build_ytdlp_args(url, dest_dir, is_playlist):
     return args
 
 
-def build_ffmpeg_args(source, dest, video_quality, audio_quality):
-    video = VIDEO_PROFILES[video_quality]
-    audio = AUDIO_PROFILES[audio_quality]
+def build_scale_filter(width, height, aspect):
+    """화면 크기에 맞추는 필터. 홀수 크기는 인코더가 거부하므로 짝수로 맞춘다."""
+    fit = (
+        f"scale=w={width}:h={height}"
+        ":force_original_aspect_ratio=decrease:force_divisible_by=2"
+    )
 
-    return [
+    if aspect == "preserve":
+        return fit
+
+    return f"{fit},pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+
+
+def build_ffmpeg_args(source, dest, settings):
+    profile = DEVICE_PROFILES[settings["device"]]
+
+    width  = profile["width"]
+    height = profile["height"]
+    video_kbps = profile["video_bitrates"][settings["video_quality"]]
+    audio_kbps = AUDIO_BITRATES[settings["audio_quality"]]
+
+    # VBV 버퍼는 보통 비트레이트의 두 배를 준다
+    maxrate = video_kbps
+    bufsize = video_kbps * 2
+
+    args = [
         "-y",
         "-i", str(source),
-        "-vf",
-        "scale=320:240:force_original_aspect_ratio=decrease,"
-        "pad=320:240:(ow-iw)/2:(oh-ih)/2",
-        "-c:v", "libx264",
-        "-profile:v", "baseline",
-        "-level", "3.0",
+        "-vf", build_scale_filter(width, height, settings["aspect"]),
+    ]
+
+    if settings["codec"] == "mpeg4":
+        # MPEG-4 Simple Profile. 구형 기기 호환용 선택지다.
+        args += [
+            "-c:v", "mpeg4",
+            "-profile:v", "0",
+            "-vtag", "mp4v",
+        ]
+    else:
+        args += [
+            "-c:v", "libx264",
+            "-profile:v", "baseline",
+            "-level", profile["level"],
+        ]
+
+    args += [
         "-pix_fmt", "yuv420p",
         "-r", "30",
-        "-b:v", video["vb"],
-        "-maxrate", video["maxrate"],
-        "-bufsize", video["bufsize"],
+        "-b:v", f"{video_kbps}k",
+        "-maxrate", f"{maxrate}k",
+        "-bufsize", f"{bufsize}k",
         "-c:a", "aac",
-        "-b:a", audio["ab"],
+        "-b:a", f"{audio_kbps}k",
         "-ar", "44100",
         "-ac", "2",
         "-movflags", "+faststart",
@@ -920,6 +1068,8 @@ def build_ffmpeg_args(source, dest, video_quality, audio_quality):
         "-f", "mp4",
         str(dest),
     ]
+
+    return args
 
 
 # ============================================
@@ -1046,7 +1196,6 @@ class FFmpegSetupDialog(QDialog):
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
-        # --- 패키지 관리자 안내 ---
         manual_box = QGroupBox(texts["ffmpeg_manual"])
         manual_layout = QVBoxLayout(manual_box)
 
@@ -1054,15 +1203,15 @@ class FFmpegSetupDialog(QDialog):
         hint.setWordWrap(True)
         manual_layout.addWidget(hint)
 
-        command = QPlainTextEdit(package_manager_hint())
+        command_text = package_manager_hint()
+        command = QPlainTextEdit(command_text)
         command.setReadOnly(True)
         command.setFont(QFont("monospace", 9))
-        command.setFixedHeight(24 + 16 * package_manager_hint().count("\n"))
+        command.setFixedHeight(30 + 16 * command_text.count("\n"))
         manual_layout.addWidget(command)
 
         layout.addWidget(manual_box)
 
-        # --- 직접 내려받기 ---
         self.source = ffmpeg_source()
 
         auto_box = QGroupBox(texts["ffmpeg_auto"])
@@ -1103,9 +1252,7 @@ class FFmpegSetupDialog(QDialog):
 
         if self.source:
             provider_button = QPushButton(texts["ffmpeg_open_source"])
-            provider_button.clicked.connect(
-                lambda: open_url(self.source["home"])
-            )
+            provider_button.clicked.connect(lambda: open_url(self.source["home"]))
             button_row.addWidget(provider_button)
 
         button_row.addStretch()
@@ -1518,7 +1665,7 @@ class SettingsDialog(QDialog):
         texts = TEXTS[self.config["language"]]
         self.texts = texts
         self.setWindowTitle(texts["settings_title"])
-        self.resize(580, 520)
+        self.resize(600, 540)
 
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
@@ -1555,6 +1702,52 @@ class SettingsDialog(QDialog):
         tabs.addTab(general, texts["tab_general"])
 
         self.update_ffmpeg_status()
+
+        # --- 변환 ---
+        encoding = QWidget()
+        encoding_layout = QVBoxLayout(encoding)
+
+        aspect_box = QGroupBox(texts["aspect"])
+        aspect_layout = QVBoxLayout(aspect_box)
+
+        self.aspect_combo = QComboBox()
+        for mode in ASPECT_MODES:
+            self.aspect_combo.addItem(texts[f"aspect_{mode}"], mode)
+
+        index = self.aspect_combo.findData(self.config["aspect"])
+        if index >= 0:
+            self.aspect_combo.setCurrentIndex(index)
+
+        aspect_layout.addWidget(self.aspect_combo)
+
+        aspect_hint = QLabel(texts["aspect_hint"])
+        aspect_hint.setWordWrap(True)
+        aspect_hint.setStyleSheet("color: gray;")
+        aspect_layout.addWidget(aspect_hint)
+
+        encoding_layout.addWidget(aspect_box)
+
+        codec_box = QGroupBox(texts["codec"])
+        codec_layout = QVBoxLayout(codec_box)
+
+        self.codec_combo = QComboBox()
+        for codec in VIDEO_CODECS:
+            self.codec_combo.addItem(texts[f"codec_{codec}"], codec)
+
+        index = self.codec_combo.findData(self.config["codec"])
+        if index >= 0:
+            self.codec_combo.setCurrentIndex(index)
+
+        codec_layout.addWidget(self.codec_combo)
+
+        codec_hint = QLabel(texts["codec_hint"])
+        codec_hint.setWordWrap(True)
+        codec_hint.setStyleSheet("color: gray;")
+        codec_layout.addWidget(codec_hint)
+
+        encoding_layout.addWidget(codec_box)
+        encoding_layout.addStretch()
+        tabs.addTab(encoding, texts["tab_encoding"])
 
         # --- 정리 ---
         tabs.addTab(CleanupTab(self, texts), texts["tab_cleanup"])
@@ -1625,7 +1818,11 @@ class SettingsDialog(QDialog):
         self.update_ffmpeg_status()
 
     def result_config(self):
-        return {"language": self.language_combo.currentData()}
+        return {
+            "language": self.language_combo.currentData(),
+            "aspect": self.aspect_combo.currentData(),
+            "codec": self.codec_combo.currentData(),
+        }
 
 
 # ============================================
@@ -1668,6 +1865,28 @@ class MainWindow(QMainWindow):
         self.queue_box = QGroupBox()
         queue_layout = QVBoxLayout(self.queue_box)
 
+        # --- 기기 선택 ---
+        device_row = QHBoxLayout()
+        self.device_label = QLabel()
+        device_row.addWidget(self.device_label)
+
+        self.device_combo = QComboBox()
+        for key in DEVICE_PROFILES:
+            self.device_combo.addItem("", key)
+        self.device_combo.currentIndexChanged.connect(self._on_device_changed)
+        device_row.addWidget(self.device_combo)
+
+        self.device_tip = QLabel("")
+        self.device_tip.setStyleSheet("color: gray;")
+        device_row.addWidget(self.device_tip, stretch=1)
+
+        self.settings_button = QPushButton()
+        self.settings_button.clicked.connect(self.open_settings)
+        device_row.addWidget(self.settings_button)
+
+        queue_layout.addLayout(device_row)
+
+        # --- 모드와 품질 ---
         mode_row = QHBoxLayout()
         self.radio_video = QRadioButton()
         self.radio_playlist = QRadioButton()
@@ -1680,7 +1899,7 @@ class MainWindow(QMainWindow):
         mode_row.addWidget(self.video_label)
 
         self.video_combo = QComboBox()
-        for key in VIDEO_PROFILES:
+        for key in AUDIO_BITRATES:
             self.video_combo.addItem("", key)
         self.video_combo.currentIndexChanged.connect(self._on_quality_changed)
         mode_row.addWidget(self.video_combo)
@@ -1689,14 +1908,10 @@ class MainWindow(QMainWindow):
         mode_row.addWidget(self.audio_label)
 
         self.audio_combo = QComboBox()
-        for key in AUDIO_PROFILES:
+        for key in AUDIO_BITRATES:
             self.audio_combo.addItem("", key)
         self.audio_combo.currentIndexChanged.connect(self._on_quality_changed)
         mode_row.addWidget(self.audio_combo)
-
-        self.settings_button = QPushButton()
-        self.settings_button.clicked.connect(self.open_settings)
-        mode_row.addWidget(self.settings_button)
 
         queue_layout.addLayout(mode_row)
 
@@ -1794,7 +2009,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(bottom_row)
 
         self.setCentralWidget(central)
-        self.resize(880, COLLAPSED_HEIGHT)
+        self.resize(900, COLLAPSED_HEIGHT)
 
     def _build_tray(self):
         self.tray = None
@@ -1820,7 +2035,6 @@ class MainWindow(QMainWindow):
     # --------------------------------------------
 
     def check_ffmpeg(self):
-        """ffmpeg 가 없으면 설치 안내 창을 띄운다."""
         if ffmpeg_ready():
             return
 
@@ -1838,6 +2052,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} {VERSION} ({CODENAME})")
 
         self.queue_box.setTitle(self.tr_("queue"))
+        self.device_label.setText(self.tr_("device"))
         self.radio_video.setText(self.tr_("single_video"))
         self.radio_playlist.setText(self.tr_("playlist"))
         self.video_label.setText(self.tr_("video_quality"))
@@ -1858,24 +2073,61 @@ class MainWindow(QMainWindow):
             self.tr_("hide_log") if self.log_view.isVisible() else self.tr_("show_log")
         )
 
-        self._retranslate_combo(self.video_combo, "video", self.config["video_quality"])
-        self._retranslate_combo(self.audio_combo, "audio", self.config["audio_quality"])
+        self.device_combo.blockSignals(True)
+        for i in range(self.device_combo.count()):
+            key = self.device_combo.itemData(i)
+            self.device_combo.setItemText(i, self.tr_(f"device_{key}"))
+
+        index = self.device_combo.findData(self.config["device"])
+        if index >= 0:
+            self.device_combo.setCurrentIndex(index)
+        self.device_combo.blockSignals(False)
+
+        self.update_quality_labels()
 
         if not self.proc:
             self.status_label.setText(self.tr_("ready"))
 
-    def _retranslate_combo(self, combo, prefix, current):
-        combo.blockSignals(True)
+    def update_quality_labels(self):
+        """기기에 따라 비트레이트 표시가 달라지므로 다시 그린다."""
+        device = self.config["device"]
+        profile = DEVICE_PROFILES[device]
 
-        for i in range(combo.count()):
-            key = combo.itemData(i)
-            combo.setItemText(i, self.tr_(f"{prefix}_{key}"))
+        self.device_tip.setText(self.tr_(f"device_{device}_tip"))
 
-        index = combo.findData(current)
+        self.video_combo.blockSignals(True)
+        for i in range(self.video_combo.count()):
+            key = self.video_combo.itemData(i)
+            self.video_combo.setItemText(
+                i, self.tr_(f"quality_{key}", kbps=profile["video_bitrates"][key])
+            )
+
+        index = self.video_combo.findData(self.config["video_quality"])
         if index >= 0:
-            combo.setCurrentIndex(index)
+            self.video_combo.setCurrentIndex(index)
+        self.video_combo.blockSignals(False)
 
-        combo.blockSignals(False)
+        self.audio_combo.blockSignals(True)
+        for i in range(self.audio_combo.count()):
+            key = self.audio_combo.itemData(i)
+            self.audio_combo.setItemText(
+                i, self.tr_(f"quality_{key}", kbps=AUDIO_BITRATES[key])
+            )
+
+        index = self.audio_combo.findData(self.config["audio_quality"])
+        if index >= 0:
+            self.audio_combo.setCurrentIndex(index)
+        self.audio_combo.blockSignals(False)
+
+    def _on_device_changed(self):
+        self.config["device"] = self.device_combo.currentData()
+        save_config(self.config)
+        self.update_quality_labels()
+
+    def _on_quality_changed(self):
+        self.config["video_quality"] = self.video_combo.currentData()
+        self.config["audio_quality"] = self.audio_combo.currentData()
+        save_config(self.config)
 
     def open_settings(self):
         dialog = SettingsDialog(self, self.config)
@@ -1889,11 +2141,6 @@ class MainWindow(QMainWindow):
 
     def open_help(self):
         HelpDialog(self, self.config["language"]).exec()
-
-    def _on_quality_changed(self):
-        self.config["video_quality"] = self.video_combo.currentData()
-        self.config["audio_quality"] = self.audio_combo.currentData()
-        save_config(self.config)
 
     def toggle_log(self):
         visible = self.log_button.isChecked()
@@ -1964,6 +2211,7 @@ class MainWindow(QMainWindow):
         self.convert_button.setEnabled(not running)
         self.add_button.setEnabled(not running)
         self.settings_button.setEnabled(not running)
+        self.device_combo.setEnabled(not running)
         self.stop_button.setEnabled(running)
 
     # --------------------------------------------
@@ -1997,11 +2245,8 @@ class MainWindow(QMainWindow):
         if ffmpeg_ready():
             return True
 
-        answer = QMessageBox.warning(
-            self,
-            APP_NAME,
-            self.tr_("ffmpeg_missing_run"),
-            QMessageBox.Ok,
+        QMessageBox.warning(
+            self, APP_NAME, self.tr_("ffmpeg_missing_run"), QMessageBox.Ok
         )
 
         FFmpegSetupDialog(self, TEXTS[self.config["language"]]).exec()
@@ -2069,7 +2314,12 @@ class MainWindow(QMainWindow):
 
         self.start_process(
             YTDLP,
-            build_ytdlp_args(url, self.dest_dir(), self.radio_playlist.isChecked()),
+            build_ytdlp_args(
+                url,
+                self.dest_dir(),
+                self.radio_playlist.isChecked(),
+                self.config["device"],
+            ),
         )
 
     def build_convert_queue(self):
@@ -2114,8 +2364,15 @@ class MainWindow(QMainWindow):
         self.current_duration = probe_duration(source)
         self.speed_samples.clear()
 
-        video_quality = self.video_combo.currentData()
-        audio_quality = self.audio_combo.currentData()
+        settings = {
+            "device": self.config["device"],
+            "video_quality": self.video_combo.currentData(),
+            "audio_quality": self.audio_combo.currentData(),
+            "codec": self.config["codec"],
+            "aspect": self.config["aspect"],
+        }
+
+        profile = DEVICE_PROFILES[settings["device"]]
 
         self.stage = "convert"
         self.status_label.setText(f"{self.tr_('converting')}: {source.name}")
@@ -2125,13 +2382,12 @@ class MainWindow(QMainWindow):
         self.log("")
         self.log(
             f"--- Converting: {source.name}  "
-            f"[video {video_quality} / audio {audio_quality}]"
+            f"[{settings['device']} {profile['width']}x{profile['height']} "
+            f"{settings['codec']} / video {settings['video_quality']} "
+            f"/ audio {settings['audio_quality']}]"
         )
 
-        self.start_process(
-            FFMPEG,
-            build_ffmpeg_args(source, temp_output, video_quality, audio_quality),
-        )
+        self.start_process(FFMPEG, build_ffmpeg_args(source, temp_output, settings))
 
     def start_process(self, program, args):
         self.proc = QProcess(self)
