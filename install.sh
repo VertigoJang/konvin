@@ -56,7 +56,7 @@ EOF
         cp "$ROOT/assets/konvin.png" "$ICON_PATH"
     fi
 
-    cp "$ROOT/konvin.desktop" "$DESKTOP_PATH"
+    sed "s|^Exec=konvin$|Exec=$BIN_PATH|" "$ROOT/konvin.desktop" > "$DESKTOP_PATH"
 
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$APP_DIR" 2>/dev/null || true
