@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Konvin
+GenericName=Video Converter
+GenericName[ko]=동영상 변환기
+Comment=Turn YouTube videos into something a click-wheel iPod can play
+Comment[ko]=유튜브 영상을 클릭휠 아이팟에서 볼 수 있게 바꿔 줍니다
+Exec=konvin
+Icon=konvin
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=youtube;ipod;convert;video;download;
+Keywords[ko]=유튜브;아이팟;변환;동영상;다운로드;
+StartupNotify=true
+StartupWMClass=konvin.py
