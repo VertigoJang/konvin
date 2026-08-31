@@ -1,7 +1,7 @@
 # Maintainer: VertigoJang <https://github.com/VertigoJang>
 
 pkgname=konvin
-pkgver=2.5
+pkgver=2.8
 pkgrel=1
 pkgdesc="Turns YouTube videos into something a click-wheel iPod can play"
 arch=('any')
@@ -14,7 +14,7 @@ depends=(
     'ffmpeg'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('6347fbf50dd07456f6bad992d92c4aa5d972c7c8ced885a6cdc64c35cd9326ed')
+sha256sums=('SKIP')
 
 package() {
     cd "$srcdir/$pkgname-$pkgver"
