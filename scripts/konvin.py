@@ -54,8 +54,8 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v2.9"
-CODENAME = "Packaged"
+VERSION  = "v3.0"
+CODENAME = "Tidy"
 
 AUTHOR     = "장현기 (VertigoJang)"
 COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
@@ -423,6 +423,20 @@ TEXTS = {
         "cleanup_done":    "{count}개 파일을 삭제했습니다.",
         "cleanup_failed":  "{count}개 파일을 삭제하지 못했습니다.",
         "cleanup_nothing_selected": "삭제할 파일을 선택하세요.",
+        "cleanup_title":   "파일 정리",
+        "cleanup_button":  "파일 정리",
+        "record_title":    "다운로드 기록",
+        "record_hint":
+            "이미 받은 영상의 목록입니다. 같은 영상을 두 번 받지 않게 하려고 "
+            "쓰입니다. 폴더에서 파일을 지워도 이 기록은 남아 있어, 다시 받으려면 "
+            "여기서 초기화해야 합니다.",
+        "record_count":    "기록된 영상 {count}개",
+        "record_empty":    "기록이 없습니다.",
+        "record_reset":    "기록 초기화",
+        "record_confirm":
+            "다운로드 기록 {count}개를 지웁니다.\n"
+            "이후 같은 영상을 다시 받을 수 있게 됩니다. 계속할까요?",
+        "record_done":     "기록을 초기화했습니다.",
 
         "folder_tempv":     "tempv — 단일 영상 원본",
         "folder_playlistv": "playlistv — 재생목록 원본",
@@ -578,6 +592,20 @@ TEXTS = {
         "cleanup_done":    "Deleted {count} file(s).",
         "cleanup_failed":  "Could not delete {count} file(s).",
         "cleanup_nothing_selected": "Select the files you want to delete.",
+        "cleanup_title":   "Clean up files",
+        "cleanup_button":  "Clean up",
+        "record_title":    "Download history",
+        "record_hint":
+            "A list of videos already downloaded, used to avoid fetching the same "
+            "one twice. Deleting the files doesn't clear this list — reset it here "
+            "if you want to download them again.",
+        "record_count":    "{count} video(s) recorded",
+        "record_empty":    "No history yet.",
+        "record_reset":    "Reset history",
+        "record_confirm":
+            "Clear {count} download record(s).\n"
+            "You'll be able to download those videos again. Continue?",
+        "record_done":     "History cleared.",
 
         "folder_tempv":     "tempv — single video originals",
         "folder_playlistv": "playlistv — playlist originals",
@@ -714,11 +742,13 @@ HELP_SECTIONS = {
          "코덱은 H.264 가 기본이며, 재생이 안 되는 파일이 있을 때만 MPEG-4 로 "
          "바꿔 보면 됩니다."),
 
-        ("설정 › 정리",
+        ("파일 정리",
          "폴더에 쌓인 영상 파일을 지웁니다. 폴더를 고르면 파일 목록과 전체 용량이 "
-         "보이고, 필요한 것만 골라 지우거나 한 번에 비울 수 있습니다. 원본을 "
-         "지워도 이미 변환된 영상은 남고, 반대로 변환된 영상을 지우면 원본이 "
-         "남아 있는 한 다시 변환할 수 있습니다. 삭제는 되돌릴 수 없습니다."),
+         "보이고, 필요한 것만 골라 지우거나 한 번에 비울 수 있습니다. 삭제는 "
+         "되돌릴 수 없습니다.\n\n"
+         "아래쪽의 다운로드 기록은 이미 받은 영상의 목록입니다. 폴더에서 파일을 "
+         "지워도 이 기록은 남아 있어서, 같은 영상을 다시 받으려 하면 건너뜁니다. "
+         "다시 받고 싶다면 기록을 초기화하세요."),
 
         ("설정 › 정보",
          "만든 사람, 라이선스, 소스 코드 주소를 볼 수 있습니다. 버그 신고 링크와 "
@@ -801,12 +831,13 @@ HELP_SECTIONS = {
          "picture as it is. H.264 is the default codec; switch to MPEG-4 only if "
          "a file refuses to play."),
 
-        ("Settings › Cleanup",
+        ("Clean up",
          "Deletes video files that have piled up. Pick a folder to see its contents "
          "and total size, then remove individual files or empty it entirely. "
-         "Deleting originals leaves your converted videos untouched, and deleting "
-         "converted videos still lets you reconvert as long as the originals "
-         "remain. Deletion cannot be undone."),
+         "Deletion cannot be undone.\n\n"
+         "The download history below lists videos you've already fetched. Deleting "
+         "the files doesn't clear it, so the same video will be skipped next time. "
+         "Reset the history if you want to download it again."),
 
         ("Settings › About",
          "Shows the author, license and source code location. Bug report and "
@@ -1540,7 +1571,28 @@ class CleanupTab(QWidget):
         button_row.addStretch()
         layout.addLayout(button_row)
 
+        # --- 다운로드 기록 ---
+        record_box = QGroupBox(texts["record_title"])
+        record_layout = QVBoxLayout(record_box)
+
+        record_hint = QLabel(texts["record_hint"])
+        record_hint.setWordWrap(True)
+        record_hint.setStyleSheet("color: gray;")
+        record_layout.addWidget(record_hint)
+
+        record_row = QHBoxLayout()
+        self.record_label = QLabel("")
+        record_row.addWidget(self.record_label, stretch=1)
+
+        self.record_button = QPushButton(texts["record_reset"])
+        self.record_button.clicked.connect(self.reset_record)
+        record_row.addWidget(self.record_button)
+
+        record_layout.addLayout(record_row)
+        layout.addWidget(record_box)
+
         self.reload()
+        self.reload_record()
 
     def current_folder(self):
         path, extensions = self.folder_combo.currentData()
@@ -1645,6 +1697,55 @@ class CleanupTab(QWidget):
         if answer == QMessageBox.Yes:
             self.delete_paths(paths)
 
+    def record_entries(self):
+        if not ARCHIVE_FILE.exists():
+            return 0
+
+        try:
+            lines = ARCHIVE_FILE.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return 0
+
+        return len([line for line in lines if line.strip()])
+
+    def reload_record(self):
+        count = self.record_entries()
+
+        if count:
+            self.record_label.setText(
+                self.texts["record_count"].format(count=count)
+            )
+        else:
+            self.record_label.setText(self.texts["record_empty"])
+
+        self.record_button.setEnabled(bool(count))
+
+    def reset_record(self):
+        count = self.record_entries()
+
+        if not count:
+            return
+
+        answer = QMessageBox.question(
+            self,
+            APP_NAME,
+            self.texts["record_confirm"].format(count=count),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        try:
+            ARCHIVE_FILE.unlink(missing_ok=True)
+        except OSError as e:
+            QMessageBox.warning(self, APP_NAME, str(e))
+            return
+
+        self.reload_record()
+        QMessageBox.information(self, APP_NAME, self.texts["record_done"])
+
     def delete_all(self):
         paths = self.all_paths()
 
@@ -1667,6 +1768,28 @@ class CleanupTab(QWidget):
 
         if answer == QMessageBox.Yes:
             self.delete_paths(paths)
+
+
+# ============================================
+# 정리 창
+# ============================================
+
+class CleanupDialog(QDialog):
+    """설정 창을 거치지 않고 바로 여는 파일 정리 창."""
+
+    def __init__(self, parent, texts):
+        super().__init__(parent)
+
+        self.setWindowTitle(texts["cleanup_title"])
+        self.resize(560, 560)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(CleanupTab(self, texts))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.button(QDialogButtonBox.Close).setText(texts["close"])
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
 
 
 # ============================================
@@ -1765,9 +1888,6 @@ class SettingsDialog(QDialog):
         encoding_layout.addWidget(codec_box)
         encoding_layout.addStretch()
         tabs.addTab(encoding, texts["tab_encoding"])
-
-        # --- 정리 ---
-        tabs.addTab(CleanupTab(self, texts), texts["tab_cleanup"])
 
         # --- 폴더 위치 ---
         paths = QWidget()
@@ -2019,6 +2139,10 @@ class MainWindow(QMainWindow):
         self.output_label = QLabel()
         bottom_row.addWidget(self.output_label, stretch=1)
 
+        self.cleanup_button = QPushButton()
+        self.cleanup_button.clicked.connect(self.open_cleanup)
+        bottom_row.addWidget(self.cleanup_button)
+
         self.folder_button = QPushButton()
         self.folder_button.clicked.connect(lambda: open_folder(CHANGEDV))
         bottom_row.addWidget(self.folder_button)
@@ -2083,6 +2207,7 @@ class MainWindow(QMainWindow):
         self.start_button.setText(self.tr_("start"))
         self.convert_button.setText(self.tr_("convert_only"))
         self.stop_button.setText(self.tr_("stop"))
+        self.cleanup_button.setText(self.tr_("cleanup_button"))
         self.folder_button.setText(self.tr_("open_folder"))
         self.output_label.setText(self.tr_("output_path", path=CHANGEDV))
 
@@ -2159,6 +2284,9 @@ class MainWindow(QMainWindow):
     def open_help(self):
         HelpDialog(self, self.config["language"]).exec()
 
+    def open_cleanup(self):
+        CleanupDialog(self, TEXTS[self.config["language"]]).exec()
+
     def toggle_log(self):
         visible = self.log_button.isChecked()
 
@@ -2228,6 +2356,7 @@ class MainWindow(QMainWindow):
         self.convert_button.setEnabled(not running)
         self.add_button.setEnabled(not running)
         self.settings_button.setEnabled(not running)
+        self.cleanup_button.setEnabled(not running)
         self.device_combo.setEnabled(not running)
         self.stop_button.setEnabled(running)
 
