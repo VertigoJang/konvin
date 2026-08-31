@@ -17,3 +17,9 @@ venv/
 playlistv/
 __pycache__/
 *.pyc
+
+packaging/vendor/
+assets/konvin.ico
+build/
+dist/
+*.spec.bak

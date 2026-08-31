@@ -54,8 +54,8 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v2.8"
-CODENAME = "Lineage"
+VERSION  = "v2.9"
+CODENAME = "Packaged"
 
 AUTHOR     = "장현기 (VertigoJang)"
 COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
@@ -66,6 +66,19 @@ DONATE_URL = "https://buymeacoffee.com/iputaspellonyou"
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS   = sys.platform == "darwin"
 IS_ARM     = platform.machine().lower() in ("arm64", "aarch64")
+IS_FROZEN  = getattr(sys, "frozen", False)
+
+
+def bundle_dir():
+    """자원이 놓인 폴더.
+
+    PyInstaller 로 묶은 실행 파일에서는 임시로 풀린 폴더를, 소스에서 바로
+    실행할 때는 리포 루트를 가리킨다.
+    """
+    if IS_FROZEN:
+        return Path(sys._MEIPASS)
+
+    return Path(__file__).resolve().parent.parent
 
 
 def default_base():
@@ -156,8 +169,12 @@ def find_tool(name):
     if local.exists():
         return str(local)
 
-    root = Path(__file__).resolve().parent.parent
-    venv_bin = root / ".venv" / ("Scripts" if IS_WINDOWS else "bin")
+    bundled = bundle_dir() / tool_filename(name)
+
+    if bundled.exists():
+        return str(bundled)
+
+    venv_bin = bundle_dir() / ".venv" / ("Scripts" if IS_WINDOWS else "bin")
     candidate = venv_bin / tool_filename(name)
 
     return str(candidate) if candidate.exists() else name
@@ -2014,7 +2031,7 @@ class MainWindow(QMainWindow):
     def _build_tray(self):
         self.tray = None
 
-        icon_path = Path(__file__).resolve().parent.parent / "assets" / "konvin.png"
+        icon_path = bundle_dir() / "assets" / "konvin.png"
 
         if icon_path.exists():
             icon = QIcon(str(icon_path))
