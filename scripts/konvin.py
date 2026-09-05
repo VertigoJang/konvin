@@ -90,7 +90,16 @@ def default_base():
     """
     # 윈도우와 macOS 는 파일 이름의 대소문자를 구분하지 않아, 홈에 소스를
     # konvin 으로 받아 두면 작업 폴더 Konvin 과 같은 폴더가 되어 버린다.
-    if IS_WINDOWS or IS_MACOS:
+    #
+    # macOS 는 문서 폴더가 iCloud 동기화 대상인 경우가 많아 영상 파일이 통째로
+    # 올라간다. 그래서 표준 동영상 폴더를 쓴다.
+    if IS_MACOS:
+        movies = Path.home() / "Movies"
+
+        if movies.is_dir():
+            return movies / APP_NAME
+
+    if IS_WINDOWS:
         documents = Path.home() / "Documents"
 
         if documents.is_dir():
@@ -113,6 +122,10 @@ LEGACY_BASES = [Path.home() / "iPodSync"]
 
 if IS_WINDOWS:
     LEGACY_BASES.append(Path.home() / APP_NAME)
+
+if IS_MACOS:
+    # v3.0 까지는 문서 폴더에 두었다
+    LEGACY_BASES.append(Path.home() / "Documents" / APP_NAME)
 
 
 def looks_like_workspace(path):
