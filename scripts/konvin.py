@@ -88,7 +88,9 @@ def default_base():
     받아 두면 작업 폴더 Konvin 과 같은 폴더가 되어 버린다. 그래서 윈도우에서는
     문서 폴더 아래에 둔다.
     """
-    if IS_WINDOWS:
+    # 윈도우와 macOS 는 파일 이름의 대소문자를 구분하지 않아, 홈에 소스를
+    # konvin 으로 받아 두면 작업 폴더 Konvin 과 같은 폴더가 되어 버린다.
+    if IS_WINDOWS or IS_MACOS:
         documents = Path.home() / "Documents"
 
         if documents.is_dir():
@@ -1182,7 +1184,19 @@ class FFmpegDownloader(QObject):
             url, headers={"User-Agent": f"{APP_NAME}/{VERSION}"}
         )
 
-        with urllib.request.urlopen(request, timeout=30) as response:
+        # macOS 의 파이썬은 시스템 인증서를 쓰지 않아 HTTPS 검증이 실패한다.
+        # certifi 가 있으면 그 인증서 묶음을 쓴다.
+        context = None
+
+        try:
+            import certifi
+            import ssl
+
+            context = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            pass
+
+        with urllib.request.urlopen(request, timeout=30, context=context) as response:
             length = response.getheader("Content-Length")
             length = int(length) if length and length.isdigit() else 0
             read = 0
