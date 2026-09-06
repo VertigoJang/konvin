@@ -25,7 +25,7 @@ from collections import deque
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QProcess, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QFont, QIcon
+from PySide6.QtGui import QDesktopServices, QFont, QFontDatabase, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -951,6 +951,14 @@ def collect_source_files(source_dir):
     return collect_files(source_dir, VALID_EXTENSIONS)
 
 
+def monospace_font():
+    """플랫폼에 맞는 고정폭 글꼴. 이름을 직접 지정하면 macOS 에서 대체 글꼴을
+    찾느라 시작이 느려진다."""
+    font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+    font.setPointSize(11 if IS_MACOS else 9)
+    return font
+
+
 def format_size(num_bytes):
     size = float(num_bytes)
 
@@ -1281,7 +1289,7 @@ class FFmpegSetupDialog(QDialog):
         command_text = package_manager_hint()
         command = QPlainTextEdit(command_text)
         command.setReadOnly(True)
-        command.setFont(QFont("monospace", 9))
+        command.setFont(monospace_font())
         command.setFixedHeight(30 + 16 * command_text.count("\n"))
         manual_layout.addWidget(command)
 
@@ -1455,7 +1463,7 @@ class LicenseDialog(QDialog):
 
         view = QPlainTextEdit()
         view.setReadOnly(True)
-        view.setFont(QFont("monospace", 9))
+        view.setFont(monospace_font())
         view.setPlainText(MIT_LICENSE)
         layout.addWidget(view)
 
@@ -2152,7 +2160,7 @@ class MainWindow(QMainWindow):
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(3000)
-        self.log_view.setFont(QFont("monospace", 9))
+        self.log_view.setFont(monospace_font())
         self.log_view.setMinimumHeight(0)
         self.log_view.setVisible(False)
         layout.addWidget(self.log_view, stretch=1)

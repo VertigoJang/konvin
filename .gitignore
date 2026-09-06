@@ -24,3 +24,4 @@ build/
 dist/
 *.spec.bak
 konvin/
+assets/konvin.icns
