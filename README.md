@@ -42,19 +42,6 @@
 > 상한을 꽉 채우면 배터리 소모와 발열이 심해집니다. 오래 볼 생각이라면 **보통**을
 > 권합니다.
 
-## 출력 형식
-
-| 항목 | 값 |
-|---|---|
-| 컨테이너 | MP4 (`.m4v`) |
-| 영상 | H.264 Constrained Baseline (또는 MPEG-4 Simple Profile) |
-| 프레임 | 30 fps |
-| 소리 | AAC-LC, 44.1kHz, 스테레오 |
-| 소리 비트레이트 | 96k / 128k / 160k 중 선택 |
-
-영상과 소리 품질은 따로 고를 수 있습니다. 음악 위주의 영상이라면 영상을 낮게,
-소리를 높게 두는 식으로 조합하면 됩니다.
-
 ## 주요 기능
 
 - 아이팟 세대를 고르면 인코딩 설정이 자동으로 맞춰짐
@@ -65,12 +52,54 @@
 - 진행률과 남은 시간 표시
 - 중단해도 망가진 파일이 남지 않고, 이어서 변환 가능
 - 작업이 끝나면 시스템 알림
-- 쌓인 파일을 폴더별로 정리하는 기능
+- 쌓인 파일과 다운로드 기록을 정리하는 기능
 - 화면 비율 처리 선택 (레터박스 / 원본 비율 유지)
 - 한국어 / English
-- Linux · Windows 지원 (macOS 는 확인 중)
+- macOS · Windows · Linux 지원
 
 ## 설치
+
+### macOS
+
+[릴리스 페이지](https://github.com/VertigoJang/konvin/releases/latest)에서
+`Konvin-macos-intel.zip` 을 받아 압축을 풀고 `Konvin.app` 을 응용 프로그램
+폴더에 넣으면 됩니다.
+
+> 처음 실행할 때 "확인되지 않은 개발자" 경고가 뜹니다. 코드 서명 인증서가 없는
+> 개인 개발 프로그램이라 그렇습니다. Finder 에서 앱을 **우클릭한 뒤 "열기"** 를
+> 고르면 실행되고, 그다음부터는 그냥 열립니다.
+
+Apple Silicon 맥에서는 Rosetta 2 로 실행됩니다. 네이티브 빌드는 아직 없습니다.
+
+소스에서 실행하려면:
+
+```bash
+git clone https://github.com/VertigoJang/konvin.git
+cd konvin
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-gui.txt
+python scripts/konvin.py
+```
+
+### Windows
+
+[릴리스 페이지](https://github.com/VertigoJang/konvin/releases/latest)에서
+`Konvin.exe` 를 받아 실행하면 됩니다. Python 설치가 필요 없습니다.
+
+> Windows Defender 등 백신이 경고를 띄울 수 있습니다. 같은 이유입니다.
+
+소스에서 실행하려면 Git 과 Python 3.10 이상이 필요합니다.
+
+```
+cd %USERPROFILE%
+git clone https://github.com/VertigoJang/konvin.git konvin-src
+cd konvin-src
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements-gui.txt
+python scripts\konvin.py
+```
 
 ### Linux
 
@@ -87,29 +116,6 @@ Python 가상 환경과 필요한 패키지는 처음 실행할 때 알아서 �
 
 제거하려면 `./install.sh --remove` 를 실행하세요.
 
-### Windows
-
-Git 과 Python 이 필요합니다. 없다면 먼저 설치하세요.
-
-```powershell
-winget install Git.Git
-winget install Python.Python.3.12
-```
-
-그다음 명령 프롬프트(cmd)에서:
-
-```
-cd %USERPROFILE%
-git clone https://github.com/VertigoJang/konvin.git konvin-src
-cd konvin-src
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements-gui.txt
-python scripts\konvin.py
-```
-
-> Python 3.10 이상이 필요합니다.
-
 ### ffmpeg
 
 영상 변환은 **ffmpeg** 라는 별도 프로그램이 담당합니다. Konvin 에는 포함되어 있지
@@ -119,18 +125,33 @@ python scripts\konvin.py
 **패키지 관리자로 설치 (권장)**
 
 ```bash
+brew install ffmpeg            # macOS (Homebrew)
+sudo port install ffmpeg       # macOS (MacPorts)
+winget install Gyan.FFmpeg     # Windows
 sudo pacman -S ffmpeg          # Arch, Manjaro
 sudo apt install ffmpeg        # Debian, Ubuntu, Mint
 sudo dnf install ffmpeg        # Fedora
 sudo zypper install ffmpeg     # openSUSE
-brew install ffmpeg            # macOS
-winget install Gyan.FFmpeg     # Windows
 ```
 
 **안내 창에서 직접 내려받기**
 
 안내 창의 "지금 내려받기" 를 누르면 정적 빌드를 받아 작업 폴더의 `bin` 아래에
-저장합니다. 시스템에는 아무것도 설치하지 않습니다.
+저장합니다. 시스템에는 아무것도 설치하지 않습니다. Apple Silicon 맥과 ARM 리눅스는
+자동 내려받기를 지원하지 않으니 패키지 관리자를 이용해 주세요.
+
+## 사용법
+
+1. 가지고 있는 **아이팟 세대**를 고릅니다
+2. **단일 영상** 인지 **재생목록** 인지 고릅니다
+3. 유튜브 주소를 붙여 넣고 **추가**
+4. **다운로드 후 변환**
+
+변환이 끝나면 `changedv` 폴더에 파일이 생깁니다. 아래쪽 **저장 폴더 열기** 로
+바로 열 수 있습니다.
+
+받아 둔 영상 파일을 직접 변환하려면 원본 폴더에 넣고 **기존 파일 변환** 을 누르면
+됩니다.
 
 ## 설정
 
@@ -146,8 +167,9 @@ winget install Gyan.FFmpeg     # Windows
 
 | 운영체제 | 위치 |
 |---|---|
-| Linux, macOS | `~/Konvin` |
+| macOS | `~/Movies/Konvin` |
 | Windows | `%USERPROFILE%\Documents\Konvin` |
+| Linux | `~/Konvin` |
 
 | 폴더 | 내용 |
 |---|---|
@@ -157,13 +179,43 @@ winget install Gyan.FFmpeg     # Windows
 | `archivev` | 변환 후 보관된 원본 |
 | `bin` | 직접 내려받은 ffmpeg |
 
-`download_archive.txt` 에 이미 받은 영상의 목록이, `config.json` 에 설정이 저장됩니다.
-프로그램의 **설정 › 정리** 탭에서 쌓인 파일을 지울 수 있습니다.
+`download_archive.txt` 에 이미 받은 영상의 목록이, `config.json` 에 설정이
+저장됩니다. 아래쪽 **파일 정리** 버튼으로 쌓인 파일을 지우거나 다운로드 기록을
+초기화할 수 있습니다.
+
+> 폴더에서 영상을 지워도 다운로드 기록은 남아 있어, 같은 영상을 다시 받으려 하면
+> 건너뜁니다. 다시 받으려면 기록을 초기화하세요.
+
+## 출력 형식
+
+| 항목 | 값 |
+|---|---|
+| 컨테이너 | MP4 (`.m4v`) |
+| 영상 | H.264 Constrained Baseline (또는 MPEG-4 Simple Profile) |
+| 프레임 | 30 fps |
+| 소리 | AAC-LC, 44.1kHz, 스테레오 |
+| 소리 비트레이트 | 96k / 128k / 160k 중 선택 |
+
+## 아이팟으로 옮기기
+
+Konvin 은 영상을 만드는 데까지만 합니다. 기기로 옮기는 것은 별도 프로그램이
+필요합니다. macOS 는 Finder, Windows 는 Apple Devices 앱을 쓰거나,
+[iOpenPod](https://github.com/TheRealSavi/iOpenPod) 같은 도구를 이용하면 됩니다.
+
+## 직접 빌드하기
+
+```bash
+packaging/build_macos.sh          # macOS  → dist/Konvin.app
+packaging\build_windows.bat       # Windows → dist\Konvin.exe
+```
+
+아이콘 변환과 yt-dlp 내려받기까지 스크립트가 알아서 합니다.
 
 ## 버그 신고
 
 [GitHub Issues](https://github.com/VertigoJang/konvin/issues)에 남겨 주세요.
-프로그램의 **로그 보기** 를 눌러서 나오는 내용을 함께 보내 주시면 원인을 찾는 데 큰 도움이 됩니다.
+프로그램의 **로그 보기** 를 눌러서 나오는 내용을 함께 보내 주시면 원인을 찾는 데
+큰 도움이 됩니다.
 
 ## 후원
 
@@ -209,26 +261,32 @@ for TV output. If you're unsure which you have, pick the 5th generation — its
 files play on every later model. Running at the bitrate ceiling drains the
 battery, so Medium is the better everyday choice.
 
-Output is MP4 (`.m4v`) with H.264 Constrained Baseline video at 30 fps and
-AAC-LC audio at 44.1kHz stereo. Video and audio quality are chosen separately,
-so you can pair low video with high audio for a music video, or the other way
-round. MPEG-4 Simple Profile is available as a compatibility fallback.
-
 ### Features
 
 - Encoding settings follow the iPod generation you select
+- Video and audio quality chosen separately
 - Single videos and playlists (playlist files get a numeric prefix)
 - Queue several URLs and process them in one go
 - Already-downloaded videos are skipped automatically
 - Progress bar with estimated time remaining
 - Stopping never leaves a broken file behind; conversion can be resumed
 - System notification when the batch finishes
-- Built-in cleanup for accumulated files
+- Built-in cleanup for accumulated files and download history
 - Letterbox or original aspect ratio
 - Korean / English interface
-- Linux and Windows (macOS untested so far)
+- macOS, Windows and Linux
 
 ### Install
+
+**macOS** — download `Konvin-macos-intel.zip` from the
+[latest release](https://github.com/VertigoJang/konvin/releases/latest), unzip,
+and move `Konvin.app` to Applications. On first launch macOS will warn about an
+unidentified developer; **right-click the app and choose Open** to get past it.
+Apple Silicon runs it through Rosetta 2 — a native build isn't available yet.
+
+**Windows** — download `Konvin.exe` from the same page and run it. No Python
+needed. Your antivirus may warn about it for the same reason (no code signing
+certificate).
 
 **Linux**
 
@@ -239,29 +297,30 @@ cd konvin
 konvin
 ```
 
-**Windows** — with Git and Python 3.10+ installed:
-
-```
-cd %USERPROFILE%
-git clone https://github.com/VertigoJang/konvin.git konvin-src
-cd konvin-src
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements-gui.txt
-python scripts\konvin.py
-```
-
 ### ffmpeg
 
 Conversion is done by **ffmpeg**, a separate program that is not bundled with
 Konvin. If it isn't on your computer, a dialog on first run offers two options:
 install it through your package manager (recommended), or download a static
-build into Konvin's own `bin` folder without touching your system.
+build into Konvin's own `bin` folder without touching your system. Automatic
+download isn't available on Apple Silicon or ARM Linux — use a package manager
+there.
 
 ### Where files go
 
-`~/Konvin` on Linux and macOS, `Documents\Konvin` on Windows. Converted videos —
-the ones you copy to your iPod — end up in `changedv`.
+| OS | Location |
+|---|---|
+| macOS | `~/Movies/Konvin` |
+| Windows | `%USERPROFILE%\Documents\Konvin` |
+| Linux | `~/Konvin` |
+
+Converted videos — the ones you copy to your iPod — end up in `changedv`.
+
+### Getting files onto the iPod
+
+Konvin stops at producing the video. Moving it to the device needs something
+else: Finder on macOS, the Apple Devices app on Windows, or a tool like
+[iOpenPod](https://github.com/TheRealSavi/iOpenPod).
 
 ### Bugs
 
