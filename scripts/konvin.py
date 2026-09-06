@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import unicodedata
 import urllib.request
 import zipfile
 from collections import deque
@@ -29,6 +30,7 @@ from PySide6.QtGui import QDesktopServices, QFont, QFontDatabase, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -54,14 +56,16 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v3.0"
-CODENAME = "Tidy"
+VERSION  = "v3.4"
+CODENAME = "Uptodate"
 
 AUTHOR     = "장현기 (VertigoJang)"
 COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
 REPO_URL   = "https://github.com/VertigoJang/konvin"
 ISSUES_URL = "https://github.com/VertigoJang/konvin/issues"
 DONATE_URL = "https://buymeacoffee.com/iputaspellonyou"
+RELEASES_URL = "https://github.com/VertigoJang/konvin/releases/latest"
+RELEASE_API  = "https://api.github.com/repos/VertigoJang/konvin/releases/latest"
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS   = sys.platform == "darwin"
@@ -301,12 +305,15 @@ AUDIO_BITRATES = {"low": 96, "medium": 128, "high": 160}
 
 VIDEO_CODECS = ("h264", "mpeg4")
 ASPECT_MODES = ("letterbox", "preserve")
+FILENAME_MODES = ("safe", "raw")
 
 DEFAULT_DEVICE   = "5g"
 DEFAULT_VIDEO    = "medium"
 DEFAULT_AUDIO    = "medium"
 DEFAULT_CODEC    = "h264"
 DEFAULT_ASPECT   = "letterbox"
+DEFAULT_FILENAME = "safe"
+DEFAULT_CHECK_UPDATES = True
 DEFAULT_LANGUAGE = "ko"
 
 COLLAPSED_HEIGHT = 380
@@ -440,6 +447,57 @@ TEXTS = {
         "cleanup_nothing_selected": "삭제할 파일을 선택하세요.",
         "cleanup_title":   "파일 정리",
         "cleanup_button":  "파일 정리",
+        "reconvert":      "다시 변환",
+        "reconvert_title": "다시 변환",
+        "reconvert_hint":
+            "변환을 마친 뒤 보관해 둔 원본입니다. 다른 기기나 다른 화질로 "
+            "다시 만들고 싶을 때 고르세요. 지금 설정된 기기와 화질이 그대로 "
+            "적용됩니다.",
+        "reconvert_empty": "보관된 원본이 없습니다.",
+        "reconvert_select_all": "전체 선택",
+        "reconvert_select_none": "선택 해제",
+        "reconvert_start": "선택한 파일 변환",
+        "reconvert_selected": "{count}개 선택됨",
+        "reconvert_nothing": "변환할 파일을 선택하세요.",
+
+        "conflict_title":  "같은 이름의 파일이 있습니다",
+        "conflict_body":
+            "{name}\n\n이미 변환된 파일이 있습니다. 어떻게 할까요?",
+        "conflict_overwrite": "덮어쓰기",
+        "conflict_rename":    "다른 이름으로 저장",
+        "conflict_skip":      "건너뛰기",
+        "conflict_apply_all": "남은 파일에도 같은 선택 적용",
+
+        "checking":        "이미 받은 영상인지 확인하는 중...",
+        "dl_conflict_title": "이미 받은 영상입니다",
+        "dl_conflict_one":
+            "{url}\n\n이 영상은 전에 받은 적이 있습니다. 어떻게 할까요?",
+        "dl_conflict_many":
+            "{url}\n\n이 재생목록에서 {count}개는 전에 받은 적이 있습니다. "
+            "어떻게 할까요?",
+        "dl_redownload":   "다시 받기",
+        "dl_skip":         "건너뛰기",
+
+        "filename":       "파일 이름:",
+        "filename_safe":  "아이팟이 읽을 수 있게 정리 (권장)",
+        "filename_raw":   "원래 제목 그대로",
+        "filename_hint":
+            "유튜브 제목에는 분위기를 내려고 특수한 글씨체나 이모지를 쓰는 "
+            "경우가 많습니다. 아이팟 클래식에는 그 글자가 없어 목록에서 "
+            "빈칸으로 보입니다. 정리를 켜면 일반 문자로 바꾸고 이모지는 "
+            "지웁니다.",
+
+        "update_check":    "새 버전 확인",
+        "update_auto":     "시작할 때 새 버전이 있는지 확인",
+        "update_title":    "새 버전이 나왔습니다",
+        "update_body":     "지금 쓰는 버전은 {current} 이고, {latest} 이 나왔습니다.",
+        "update_open":     "릴리스 페이지 열기",
+        "update_later":    "나중에",
+        "update_skip":     "이 버전은 다시 알리지 않기",
+        "update_none":     "최신 버전을 쓰고 있습니다.",
+        "update_failed":   "확인하지 못했습니다: {error}",
+        "update_checking": "확인하는 중...",
+
         "record_title":    "다운로드 기록",
         "record_hint":
             "이미 받은 영상의 목록입니다. 같은 영상을 두 번 받지 않게 하려고 "
@@ -609,6 +667,59 @@ TEXTS = {
         "cleanup_nothing_selected": "Select the files you want to delete.",
         "cleanup_title":   "Clean up files",
         "cleanup_button":  "Clean up",
+        "reconvert":      "Convert again",
+        "reconvert_title": "Convert again",
+        "reconvert_hint":
+            "Originals kept after conversion. Pick the ones you want to remake "
+            "for a different device or quality — the settings currently "
+            "selected will be used.",
+        "reconvert_empty": "No originals kept yet.",
+        "reconvert_select_all": "Select all",
+        "reconvert_select_none": "Clear selection",
+        "reconvert_start": "Convert selected",
+        "reconvert_selected": "{count} selected",
+        "reconvert_nothing": "Select the files you want to convert.",
+
+        "conflict_title":  "A file with that name exists",
+        "conflict_body":
+            "{name}\n\nThis has already been converted. What would you like "
+            "to do?",
+        "conflict_overwrite": "Overwrite",
+        "conflict_rename":    "Save under a new name",
+        "conflict_skip":      "Skip",
+        "conflict_apply_all": "Do the same for the remaining files",
+
+        "checking":        "Checking what's already been downloaded...",
+        "dl_conflict_title": "Already downloaded",
+        "dl_conflict_one":
+            "{url}\n\nYou've downloaded this before. What would you like "
+            "to do?",
+        "dl_conflict_many":
+            "{url}\n\n{count} video(s) in this playlist have been downloaded "
+            "before. What would you like to do?",
+        "dl_redownload":   "Download again",
+        "dl_skip":         "Skip",
+
+        "filename":       "Filenames:",
+        "filename_safe":  "Clean up for the iPod (recommended)",
+        "filename_raw":   "Keep the original title",
+        "filename_hint":
+            "YouTube titles often use styled letters or emoji for effect. The "
+            "iPod classic has no glyphs for those, so they show up as blanks "
+            "in the list. Cleaning up converts them to plain characters and "
+            "drops emoji.",
+
+        "update_check":    "Check for updates",
+        "update_auto":     "Check for a new version on startup",
+        "update_title":    "A new version is available",
+        "update_body":     "You have {current}; {latest} is out.",
+        "update_open":     "Open the release page",
+        "update_later":    "Later",
+        "update_skip":     "Don't tell me about this version again",
+        "update_none":     "You're on the latest version.",
+        "update_failed":   "Couldn't check: {error}",
+        "update_checking": "Checking...",
+
         "record_title":    "Download history",
         "record_hint":
             "A list of videos already downloaded, used to avoid fetching the same "
@@ -757,13 +868,36 @@ HELP_SECTIONS = {
          "코덱은 H.264 가 기본이며, 재생이 안 되는 파일이 있을 때만 MPEG-4 로 "
          "바꿔 보면 됩니다."),
 
+        ("다시 변환",
+         "변환을 마친 뒤 보관해 둔 원본을 다시 변환합니다. 다른 기기용으로 "
+         "만들거나 화질을 바꾸고 싶을 때 쓰면 됩니다. 버튼을 누르면 보관된 "
+         "원본 목록이 뜨고, 필요한 것만 골라 변환할 수 있습니다.\n\n"
+         "이미 같은 이름의 결과물이 있으면 덮어쓸지, 다른 이름으로 둘지, "
+         "건너뛸지 물어봅니다."),
+
+        ("이미 받은 영상",
+         "한 번 받은 영상은 기록에 남습니다. 같은 주소를 다시 넣으면 프로그램이 "
+         "알아채고 다시 받을지 건너뛸지 물어봅니다. 재생목록은 안에 든 영상까지 "
+         "미리 확인하므로, 목록의 일부만 새로 추가된 경우에도 필요한 것만 "
+         "받습니다."),
+
+        ("파일 이름 정리",
+         "유튜브 제목에는 분위기를 내려고 특수한 글씨체를 쓰는 경우가 많습니다. "
+         "겉보기에는 기울임체나 굵은 글씨 같지만 실제로는 전혀 다른 문자이며, "
+         "아이팟 클래식의 폰트에는 그 글자가 없어 목록에서 아무것도 보이지 "
+         "않습니다. 이모지도 마찬가지입니다.\n\n"
+         "기본값으로 이런 문자를 일반 알파벳과 숫자로 바꾸고 이모지는 지웁니다. "
+         "한글과 일반 문자는 그대로 남습니다. 설정 › 인코딩에서 끌 수 있습니다."),
+
+        ("새 버전 확인",
+         "프로그램을 켤 때 새 버전이 나왔는지 조용히 확인합니다. 있으면 알림 "
+         "창이 뜨고, 릴리스 페이지를 열어 내려받을 수 있습니다. 특정 버전을 "
+         "다시 알리지 않게 하거나, 설정 › 일반에서 확인 자체를 끌 수 있습니다."),
+
         ("파일 정리",
          "폴더에 쌓인 영상 파일을 지웁니다. 폴더를 고르면 파일 목록과 전체 용량이 "
          "보이고, 필요한 것만 골라 지우거나 한 번에 비울 수 있습니다. 삭제는 "
-         "되돌릴 수 없습니다.\n\n"
-         "아래쪽의 다운로드 기록은 이미 받은 영상의 목록입니다. 폴더에서 파일을 "
-         "지워도 이 기록은 남아 있어서, 같은 영상을 다시 받으려 하면 건너뜁니다. "
-         "다시 받고 싶다면 기록을 초기화하세요."),
+         "되돌릴 수 없습니다."),
 
         ("설정 › 정보",
          "만든 사람, 라이선스, 소스 코드 주소를 볼 수 있습니다. 버그 신고 링크와 "
@@ -846,13 +980,39 @@ HELP_SECTIONS = {
          "picture as it is. H.264 is the default codec; switch to MPEG-4 only if "
          "a file refuses to play."),
 
+        ("Convert again",
+         "Reconverts originals kept after a previous run — useful for making a "
+         "version for a different iPod or at a different quality. The button "
+         "opens a list of kept originals so you can pick just the ones you "
+         "want.\n\n"
+         "If a converted file with the same name already exists, you'll be "
+         "asked whether to overwrite it, save under a new name, or skip it."),
+
+        ("Already downloaded",
+         "Videos you've fetched are remembered. Add the same link again and "
+         "Konvin notices, asking whether to download it again or skip it. "
+         "Playlists are checked item by item, so if only part of a list is new, "
+         "only that part is fetched."),
+
+        ("Filename cleanup",
+         "YouTube titles often use styled letters for effect. They look like "
+         "italics or bold, but they are entirely different characters, and the "
+         "iPod classic has no glyphs for them — the entry shows up blank in the "
+         "list. The same goes for emoji.\n\n"
+         "By default these are converted to plain letters and digits, and emoji "
+         "are dropped. Korean and ordinary characters are left alone. You can "
+         "turn this off in Settings > Encoding."),
+
+        ("Checking for updates",
+         "On startup Konvin quietly checks whether a newer version is out. If "
+         "there is one, a dialog offers to open the release page. You can "
+         "dismiss a particular version for good, or turn the check off entirely "
+         "in Settings > General."),
+
         ("Clean up",
          "Deletes video files that have piled up. Pick a folder to see its contents "
          "and total size, then remove individual files or empty it entirely. "
-         "Deletion cannot be undone.\n\n"
-         "The download history below lists videos you've already fetched. Deleting "
-         "the files doesn't clear it, so the same video will be skipped next time. "
-         "Reset the history if you want to download it again."),
+         "Deletion cannot be undone."),
 
         ("Settings › About",
          "Shows the author, license and source code location. Bug report and "
@@ -880,6 +1040,9 @@ def load_config():
         "audio_quality": DEFAULT_AUDIO,
         "codec": DEFAULT_CODEC,
         "aspect": DEFAULT_ASPECT,
+        "filename": DEFAULT_FILENAME,
+        "check_updates": DEFAULT_CHECK_UPDATES,
+        "skip_version": "",
         "language": DEFAULT_LANGUAGE,
     }
 
@@ -908,6 +1071,15 @@ def load_config():
 
     if data.get("aspect") in ASPECT_MODES:
         config["aspect"] = data["aspect"]
+
+    if data.get("filename") in FILENAME_MODES:
+        config["filename"] = data["filename"]
+
+    if isinstance(data.get("check_updates"), bool):
+        config["check_updates"] = data["check_updates"]
+
+    if isinstance(data.get("skip_version"), str):
+        config["skip_version"] = data["skip_version"]
 
     if data.get("language") in TEXTS:
         config["language"] = data["language"]
@@ -957,6 +1129,67 @@ def monospace_font():
     font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
     font.setPointSize(11 if IS_MACOS else 9)
     return font
+
+
+# 아이팟 폰트에 없는 기호를 비슷한 아스키로 바꾼다. NFKD 로도 분해되지
+# 않는 것들이다.
+SYMBOL_MAP = {
+    "\u29f8": "/", "\u29f9": "\\", "\uff0f": "/", "\uff3c": "\\",
+    "\uff5c": "|", "\u2215": "/", "\u2044": "/",
+    "\u201c": '\"', "\u201d": '\"', "\u201e": '\"', "\u201f": '\"',
+    "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+    "\u2013": "-", "\u2014": "-", "\u2015": "-", "\u2010": "-",
+    "\u2026": "...", "\u2022": "-", "\u00b7": "-", "\u2027": "-",
+    "\u00ab": '\"', "\u00bb": '\"', "\u2039": "'", "\u203a": "'",
+    "\u2605": "*", "\u2606": "*", "\u266a": "", "\u266b": "",
+    "\u2192": "->", "\u2190": "<-", "\u2194": "<->",
+    "\u00d7": "x", "\u00f7": "/", "\u00b1": "+/-",
+    "\u00a9": "(c)", "\u00ae": "(R)", "\u2122": "(TM)",
+    "\u200b": "", "\u200c": "", "\u200d": "", "\ufeff": "",
+    "\u00a0": " ",
+}
+
+
+def ipod_safe_text(value):
+    """아이팟 클래식이 표시할 수 있는 문자만 남긴다.
+
+    유튜브 제목에 흔한 수학 볼드·이탤릭이나 전각 문자는 일반 알파벳과 다른
+    코드포인트라 기기 폰트에 없다. NFKD 로 기본 형태로 되돌린 뒤, 한글이
+    자모로 쪼개진 것은 NFC 로 다시 합친다. 이모지처럼 대응되는 문자가 없는
+    것은 지운다.
+    """
+    if not value:
+        return value
+
+    for source, target in SYMBOL_MAP.items():
+        value = value.replace(source, target)
+
+    value = unicodedata.normalize("NFKD", value)
+
+    kept = []
+
+    for char in value:
+        category = unicodedata.category(char)
+
+        # 결합 문자는 남겨 두어야 NFC 로 한글이 다시 합쳐진다
+        if category.startswith("M"):
+            kept.append(char)
+            continue
+
+        # 기호·그림 영역(이모지 등)은 버린다
+        if category in ("So", "Sk", "Cf", "Co", "Cn"):
+            continue
+
+        if ord(char) > 0xFFFF:
+            continue
+
+        kept.append(char)
+
+    value = unicodedata.normalize("NFC", "".join(kept))
+    value = re.sub(r"\s+", " ", value).strip()
+    value = re.sub(r'[<>:"/\\\\|?*]', "_", value)
+
+    return value or "untitled"
 
 
 def format_size(num_bytes):
@@ -1044,6 +1277,160 @@ def parse_ffmpeg_time(line):
 def parse_ffmpeg_speed(line):
     match = SPEED_RE.search(line)
     return float(match.group(1)) if match else None
+
+
+# 유튜브 주소에서 영상 아이디를 뽑는다
+YOUTUBE_ID_RE = re.compile(
+    r"(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/|v/))"
+    r"([A-Za-z0-9_-]{11})"
+)
+
+
+def read_archive_ids():
+    """이미 받은 영상 아이디 모음. 기록 파일은 'youtube ID' 형식이다."""
+    if not ARCHIVE_FILE.exists():
+        return set()
+
+    ids = set()
+
+    try:
+        for line in ARCHIVE_FILE.read_text(encoding="utf-8").splitlines():
+            parts = line.split()
+
+            if len(parts) >= 2:
+                ids.add(parts[1])
+    except OSError:
+        pass
+
+    return ids
+
+
+def remove_archive_ids(ids):
+    """다시 받기로 정한 영상을 기록에서 뺀다."""
+    if not ids or not ARCHIVE_FILE.exists():
+        return
+
+    try:
+        lines = ARCHIVE_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+
+    kept = []
+
+    for line in lines:
+        parts = line.split()
+
+        if len(parts) >= 2 and parts[1] in ids:
+            continue
+
+        if line.strip():
+            kept.append(line)
+
+    try:
+        ARCHIVE_FILE.write_text(
+            "\n".join(kept) + ("\n" if kept else ""), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
+def extract_video_id(url):
+    """단일 영상 주소에서 아이디를 뽑는다. 못 뽑으면 None."""
+    match = YOUTUBE_ID_RE.search(url)
+    return match.group(1) if match else None
+
+
+def version_tuple(value):
+    """'v3.4' 나 '3.4.1' 을 비교할 수 있는 숫자 묶음으로."""
+    numbers = re.findall(r"\d+", value or "")
+    return tuple(int(n) for n in numbers) if numbers else (0,)
+
+
+def ssl_context():
+    """macOS 의 파이썬은 시스템 인증서를 쓰지 않아 검증이 실패한다."""
+    try:
+        import certifi
+        import ssl
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return None
+
+
+class IdResolver(QObject):
+    """주소마다 어떤 영상이 들어 있는지 미리 알아본다.
+
+    단일 영상은 주소만 보면 되지만, 재생목록은 안에 무엇이 있는지 조회해야
+    하므로 네트워크를 쓴다. 그래서 별도 스레드에서 돈다.
+    """
+
+    finished = Signal(list)
+
+    def __init__(self, urls, is_playlist):
+        super().__init__()
+        self.urls = list(urls)
+        self.is_playlist = is_playlist
+
+    def run(self):
+        results = []
+
+        for url in self.urls:
+            if self.is_playlist:
+                results.append((url, self._playlist_ids(url)))
+                continue
+
+            found = extract_video_id(url)
+            results.append((url, [found] if found else []))
+
+        self.finished.emit(results)
+
+    def _playlist_ids(self, url):
+        try:
+            result = subprocess.run(
+                [
+                    YTDLP,
+                    "--flat-playlist",
+                    "--no-warnings",
+                    "--print", "%(id)s",
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                **hidden_process_kwargs(),
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+
+        return [
+            line.strip() for line in result.stdout.splitlines() if line.strip()
+        ]
+
+
+class UpdateChecker(QObject):
+    """GitHub 릴리스를 조회해 새 버전이 있는지 본다."""
+
+    finished = Signal(str, str)
+
+    def run(self):
+        request = urllib.request.Request(
+            RELEASE_API,
+            headers={
+                "User-Agent": f"{APP_NAME}/{VERSION}",
+                "Accept": "application/vnd.github+json",
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(
+                request, timeout=10, context=ssl_context()
+            ) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception as e:
+            self.finished.emit("", str(e))
+            return
+
+        self.finished.emit(data.get("tag_name", ""), "")
 
 
 def build_ytdlp_args(url, dest_dir, is_playlist, device):
@@ -1606,28 +1993,7 @@ class CleanupTab(QWidget):
         button_row.addStretch()
         layout.addLayout(button_row)
 
-        # --- 다운로드 기록 ---
-        record_box = QGroupBox(texts["record_title"])
-        record_layout = QVBoxLayout(record_box)
-
-        record_hint = QLabel(texts["record_hint"])
-        record_hint.setWordWrap(True)
-        record_hint.setStyleSheet("color: gray;")
-        record_layout.addWidget(record_hint)
-
-        record_row = QHBoxLayout()
-        self.record_label = QLabel("")
-        record_row.addWidget(self.record_label, stretch=1)
-
-        self.record_button = QPushButton(texts["record_reset"])
-        self.record_button.clicked.connect(self.reset_record)
-        record_row.addWidget(self.record_button)
-
-        record_layout.addLayout(record_row)
-        layout.addWidget(record_box)
-
         self.reload()
-        self.reload_record()
 
     def current_folder(self):
         path, extensions = self.folder_combo.currentData()
@@ -1732,55 +2098,6 @@ class CleanupTab(QWidget):
         if answer == QMessageBox.Yes:
             self.delete_paths(paths)
 
-    def record_entries(self):
-        if not ARCHIVE_FILE.exists():
-            return 0
-
-        try:
-            lines = ARCHIVE_FILE.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            return 0
-
-        return len([line for line in lines if line.strip()])
-
-    def reload_record(self):
-        count = self.record_entries()
-
-        if count:
-            self.record_label.setText(
-                self.texts["record_count"].format(count=count)
-            )
-        else:
-            self.record_label.setText(self.texts["record_empty"])
-
-        self.record_button.setEnabled(bool(count))
-
-    def reset_record(self):
-        count = self.record_entries()
-
-        if not count:
-            return
-
-        answer = QMessageBox.question(
-            self,
-            APP_NAME,
-            self.texts["record_confirm"].format(count=count),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-
-        if answer != QMessageBox.Yes:
-            return
-
-        try:
-            ARCHIVE_FILE.unlink(missing_ok=True)
-        except OSError as e:
-            QMessageBox.warning(self, APP_NAME, str(e))
-            return
-
-        self.reload_record()
-        QMessageBox.information(self, APP_NAME, self.texts["record_done"])
-
     def delete_all(self):
         paths = self.all_paths()
 
@@ -1803,6 +2120,277 @@ class CleanupTab(QWidget):
 
         if answer == QMessageBox.Yes:
             self.delete_paths(paths)
+
+
+# ============================================
+# 새 버전 알림 창
+# ============================================
+
+class UpdateDialog(QDialog):
+
+    def __init__(self, parent, texts, latest):
+        super().__init__(parent)
+
+        self.texts = texts
+        self.latest = latest
+
+        self.setWindowTitle(texts["update_title"])
+        self.setMinimumWidth(440)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        body = QLabel(
+            texts["update_body"].format(current=VERSION, latest=latest)
+        )
+        body.setWordWrap(True)
+        layout.addWidget(body)
+
+        self.skip_box = QCheckBox(texts["update_skip"])
+        layout.addWidget(self.skip_box)
+
+        button_row = QHBoxLayout()
+
+        open_button = QPushButton(texts["update_open"])
+        open_button.clicked.connect(self._open)
+        open_button.setDefault(True)
+
+        later = QPushButton(texts["update_later"])
+        later.clicked.connect(self.accept)
+
+        button_row.addWidget(open_button)
+        button_row.addWidget(later)
+        layout.addLayout(button_row)
+
+    def _open(self):
+        open_url(RELEASES_URL)
+        self.accept()
+
+    def should_skip(self):
+        return self.skip_box.isChecked()
+
+
+# ============================================
+# 다운로드 충돌 창
+# ============================================
+
+class DownloadConflictDialog(QDialog):
+    """이미 받은 영상일 때 어떻게 할지 묻는다."""
+
+    REDOWNLOAD = "redownload"
+    SKIP = "skip"
+
+    def __init__(self, parent, texts, url, count, remaining):
+        super().__init__(parent)
+
+        self.texts = texts
+        self.choice = self.SKIP
+
+        self.setWindowTitle(texts["dl_conflict_title"])
+        self.setMinimumWidth(480)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        if count > 1:
+            message = texts["dl_conflict_many"].format(url=url, count=count)
+        else:
+            message = texts["dl_conflict_one"].format(url=url)
+
+        body = QLabel(message)
+        body.setWordWrap(True)
+        body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(body)
+
+        self.apply_all = QCheckBox(texts["conflict_apply_all"])
+        self.apply_all.setEnabled(remaining > 0)
+        layout.addWidget(self.apply_all)
+
+        button_row = QHBoxLayout()
+
+        again = QPushButton(texts["dl_redownload"])
+        again.clicked.connect(lambda: self._choose(self.REDOWNLOAD))
+
+        skip = QPushButton(texts["dl_skip"])
+        skip.clicked.connect(lambda: self._choose(self.SKIP))
+        skip.setDefault(True)
+
+        button_row.addWidget(again)
+        button_row.addWidget(skip)
+        layout.addLayout(button_row)
+
+    def _choose(self, choice):
+        self.choice = choice
+        self.accept()
+
+    def result_choice(self):
+        return self.choice, self.apply_all.isChecked()
+
+
+# ============================================
+# 파일 충돌 창
+# ============================================
+
+class ConflictDialog(QDialog):
+    """이미 변환된 결과물이 있을 때 어떻게 할지 묻는다."""
+
+    OVERWRITE = "overwrite"
+    RENAME = "rename"
+    SKIP = "skip"
+
+    def __init__(self, parent, texts, name, remaining):
+        super().__init__(parent)
+
+        self.texts = texts
+        self.choice = self.SKIP
+
+        self.setWindowTitle(texts["conflict_title"])
+        self.setMinimumWidth(460)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        body = QLabel(texts["conflict_body"].format(name=name))
+        body.setWordWrap(True)
+        body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(body)
+
+        self.apply_all = QCheckBox(texts["conflict_apply_all"])
+        self.apply_all.setEnabled(remaining > 0)
+        layout.addWidget(self.apply_all)
+
+        button_row = QHBoxLayout()
+
+        overwrite = QPushButton(texts["conflict_overwrite"])
+        overwrite.clicked.connect(lambda: self._choose(self.OVERWRITE))
+
+        rename = QPushButton(texts["conflict_rename"])
+        rename.clicked.connect(lambda: self._choose(self.RENAME))
+        rename.setDefault(True)
+
+        skip = QPushButton(texts["conflict_skip"])
+        skip.clicked.connect(lambda: self._choose(self.SKIP))
+
+        button_row.addWidget(overwrite)
+        button_row.addWidget(rename)
+        button_row.addWidget(skip)
+        layout.addLayout(button_row)
+
+    def _choose(self, choice):
+        self.choice = choice
+        self.accept()
+
+    def result_choice(self):
+        return self.choice, self.apply_all.isChecked()
+
+
+# ============================================
+# 다시 변환 창
+# ============================================
+
+class ReconvertDialog(QDialog):
+    """보관된 원본 중에서 다시 변환할 것을 고른다."""
+
+    def __init__(self, parent, texts):
+        super().__init__(parent)
+
+        self.texts = texts
+        self.selected = []
+
+        self.setWindowTitle(texts["reconvert_title"])
+        self.resize(560, 520)
+
+        layout = QVBoxLayout(self)
+
+        hint = QLabel(texts["reconvert_hint"])
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: gray;")
+        layout.addWidget(hint)
+
+        self.file_list = QListWidget()
+        layout.addWidget(self.file_list, stretch=1)
+
+        self.count_label = QLabel("")
+        layout.addWidget(self.count_label)
+
+        select_row = QHBoxLayout()
+
+        all_button = QPushButton(texts["reconvert_select_all"])
+        all_button.clicked.connect(lambda: self._set_all(Qt.Checked))
+
+        none_button = QPushButton(texts["reconvert_select_none"])
+        none_button.clicked.connect(lambda: self._set_all(Qt.Unchecked))
+
+        select_row.addWidget(all_button)
+        select_row.addWidget(none_button)
+        select_row.addStretch()
+        layout.addLayout(select_row)
+
+        buttons = QDialogButtonBox()
+        self.start_button = buttons.addButton(
+            texts["reconvert_start"], QDialogButtonBox.AcceptRole
+        )
+        buttons.addButton(QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self._accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self._load()
+
+    def _load(self):
+        files = collect_source_files(ARCHIVEV)
+
+        for file in files:
+            try:
+                size = file.stat().st_size
+            except OSError:
+                size = 0
+
+            item = QListWidgetItem(f"{file.name}   ({format_size(size)})")
+            item.setData(Qt.UserRole, str(file))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self.file_list.addItem(item)
+
+        if not files:
+            self.count_label.setText(self.texts["reconvert_empty"])
+            self.start_button.setEnabled(False)
+        else:
+            self.file_list.itemChanged.connect(self._update_count)
+            self._update_count()
+
+    def _set_all(self, state):
+        for i in range(self.file_list.count()):
+            self.file_list.item(i).setCheckState(state)
+
+    def _checked_paths(self):
+        paths = []
+
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+
+            if item.checkState() == Qt.Checked:
+                paths.append(Path(item.data(Qt.UserRole)))
+
+        return paths
+
+    def _update_count(self):
+        count = len(self._checked_paths())
+        self.count_label.setText(
+            self.texts["reconvert_selected"].format(count=count)
+        )
+
+    def _accept(self):
+        paths = self._checked_paths()
+
+        if not paths:
+            QMessageBox.information(
+                self, APP_NAME, self.texts["reconvert_nothing"]
+            )
+            return
+
+        self.selected = paths
+        self.accept()
 
 
 # ============================================
@@ -1873,6 +2461,27 @@ class SettingsDialog(QDialog):
         ffmpeg_layout.addWidget(self.ffmpeg_button)
 
         general_layout.addWidget(ffmpeg_box)
+
+        update_box = QGroupBox(texts["update_check"])
+        update_layout = QVBoxLayout(update_box)
+
+        self.update_auto_box = QCheckBox(texts["update_auto"])
+        self.update_auto_box.setChecked(self.config["check_updates"])
+        update_layout.addWidget(self.update_auto_box)
+
+        update_row = QHBoxLayout()
+        self.update_button = QPushButton(texts["update_check"])
+        self.update_button.clicked.connect(self.check_updates_now)
+        update_row.addWidget(self.update_button)
+
+        self.update_status = QLabel("")
+        self.update_status.setWordWrap(True)
+        self.update_status.setStyleSheet("color: gray;")
+        update_row.addWidget(self.update_status, stretch=1)
+
+        update_layout.addLayout(update_row)
+        general_layout.addWidget(update_box)
+
         general_layout.addStretch()
         tabs.addTab(general, texts["tab_general"])
 
@@ -1921,6 +2530,26 @@ class SettingsDialog(QDialog):
         codec_layout.addWidget(codec_hint)
 
         encoding_layout.addWidget(codec_box)
+
+        filename_box = QGroupBox(texts["filename"])
+        filename_layout = QVBoxLayout(filename_box)
+
+        self.filename_combo = QComboBox()
+        for mode in FILENAME_MODES:
+            self.filename_combo.addItem(texts[f"filename_{mode}"], mode)
+
+        index = self.filename_combo.findData(self.config["filename"])
+        if index >= 0:
+            self.filename_combo.setCurrentIndex(index)
+
+        filename_layout.addWidget(self.filename_combo)
+
+        filename_hint = QLabel(texts["filename_hint"])
+        filename_hint.setWordWrap(True)
+        filename_hint.setStyleSheet("color: gray;")
+        filename_layout.addWidget(filename_hint)
+
+        encoding_layout.addWidget(filename_box)
         encoding_layout.addStretch()
         tabs.addTab(encoding, texts["tab_encoding"])
 
@@ -1989,11 +2618,47 @@ class SettingsDialog(QDialog):
         FFmpegSetupDialog(self, self.texts).exec()
         self.update_ffmpeg_status()
 
+    def check_updates_now(self):
+        self.update_button.setEnabled(False)
+        self.update_status.setText(self.texts["update_checking"])
+
+        self.update_thread = QThread(self)
+        self.update_worker = UpdateChecker()
+        self.update_worker.moveToThread(self.update_thread)
+
+        self.update_thread.started.connect(self.update_worker.run)
+        self.update_worker.finished.connect(self._on_update_checked)
+
+        self.update_thread.start()
+
+    def _on_update_checked(self, latest, error):
+        self.update_thread.quit()
+        self.update_thread.wait()
+        self.update_thread = None
+        self.update_worker = None
+
+        self.update_button.setEnabled(True)
+
+        if error:
+            self.update_status.setText(
+                self.texts["update_failed"].format(error=error)
+            )
+            return
+
+        if latest and version_tuple(latest) > version_tuple(VERSION):
+            self.update_status.setText("")
+            UpdateDialog(self, self.texts, latest).exec()
+            return
+
+        self.update_status.setText(self.texts["update_none"])
+
     def result_config(self):
         return {
             "language": self.language_combo.currentData(),
             "aspect": self.aspect_combo.currentData(),
             "codec": self.codec_combo.currentData(),
+            "filename": self.filename_combo.currentData(),
+            "check_updates": self.update_auto_box.isChecked(),
         }
 
 
@@ -2025,6 +2690,15 @@ class MainWindow(QMainWindow):
 
         self.stats = {"converted": 0, "skipped": 0, "failed": 0}
         self.collapsed_height = COLLAPSED_HEIGHT
+
+        # 다시 변환 중에는 원본을 옮기지 않는다
+        self.reconverting = False
+        self.conflict_choice = None
+
+        self.resolve_thread = None
+        self.resolver = None
+        self.update_thread = None
+        self.update_worker = None
 
         self._build_ui()
         self._build_tray()
@@ -2117,6 +2791,8 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self.start_download)
         self.convert_button = QPushButton()
         self.convert_button.clicked.connect(self.start_convert_only)
+        self.reconvert_button = QPushButton()
+        self.reconvert_button.clicked.connect(self.start_reconvert)
         self.stop_button = QPushButton()
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop)
@@ -2128,6 +2804,7 @@ class MainWindow(QMainWindow):
 
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.convert_button)
+        action_row.addWidget(self.reconvert_button)
         action_row.addWidget(self.stop_button)
         action_row.addWidget(self.log_button)
         layout.addLayout(action_row)
@@ -2210,6 +2887,42 @@ class MainWindow(QMainWindow):
     # 첫 실행 점검
     # --------------------------------------------
 
+    def check_updates(self):
+        """시작할 때 조용히 확인한다. 실패해도 아무 말 하지 않는다."""
+        if not self.config.get("check_updates", True):
+            return
+
+        self.update_thread = QThread(self)
+        self.update_worker = UpdateChecker()
+        self.update_worker.moveToThread(self.update_thread)
+
+        self.update_thread.started.connect(self.update_worker.run)
+        self.update_worker.finished.connect(self.on_update_checked)
+
+        self.update_thread.start()
+
+    def on_update_checked(self, latest, error):
+        self.update_thread.quit()
+        self.update_thread.wait()
+        self.update_thread = None
+        self.update_worker = None
+
+        if error or not latest:
+            return
+
+        if version_tuple(latest) <= version_tuple(VERSION):
+            return
+
+        if latest == self.config.get("skip_version"):
+            return
+
+        dialog = UpdateDialog(self, TEXTS[self.config["language"]], latest)
+        dialog.exec()
+
+        if dialog.should_skip():
+            self.config["skip_version"] = latest
+            save_config(self.config)
+
     def check_ffmpeg(self):
         if ffmpeg_ready():
             return
@@ -2241,6 +2954,7 @@ class MainWindow(QMainWindow):
         self.clear_button.setText(self.tr_("clear"))
         self.start_button.setText(self.tr_("start"))
         self.convert_button.setText(self.tr_("convert_only"))
+        self.reconvert_button.setText(self.tr_("reconvert"))
         self.stop_button.setText(self.tr_("stop"))
         self.cleanup_button.setText(self.tr_("cleanup_button"))
         self.folder_button.setText(self.tr_("open_folder"))
@@ -2389,6 +3103,7 @@ class MainWindow(QMainWindow):
     def set_running(self, running):
         self.start_button.setEnabled(not running)
         self.convert_button.setEnabled(not running)
+        self.reconvert_button.setEnabled(not running)
         self.add_button.setEnabled(not running)
         self.settings_button.setEnabled(not running)
         self.cleanup_button.setEnabled(not running)
@@ -2444,16 +3159,152 @@ class MainWindow(QMainWindow):
             return
 
         self.stopping = False
+        self.reconverting = False
         self.stats = {"converted": 0, "skipped": 0, "failed": 0}
-        self.download_queue = list(urls)
         self.convert_queue = []
-        self.total_files = len(urls)
         self.current_index = 0
 
         self.set_running(True)
         self.reset_progress()
         self.log("=" * 50)
+
+        # 무엇을 이미 받았는지 먼저 알아본다
+        self.status_label.setText(self.tr_("checking"))
+
+        self.resolve_thread = QThread(self)
+        self.resolver = IdResolver(urls, self.radio_playlist.isChecked())
+        self.resolver.moveToThread(self.resolve_thread)
+
+        self.resolve_thread.started.connect(self.resolver.run)
+        self.resolver.finished.connect(self.on_ids_resolved)
+
+        self.resolve_thread.start()
+
+    def on_ids_resolved(self, results):
+        self.resolve_thread.quit()
+        self.resolve_thread.wait()
+        self.resolve_thread = None
+        self.resolver = None
+
+        if self.stopping:
+            self.finish()
+            return
+
+        known = read_archive_ids()
+        queue = []
+        to_forget = set()
+        choice = None
+
+        for index, (url, ids) in enumerate(results):
+            seen = [video_id for video_id in ids if video_id in known]
+
+            if not seen:
+                queue.append(url)
+                continue
+
+            if choice is None:
+                dialog = DownloadConflictDialog(
+                    self,
+                    TEXTS[self.config["language"]],
+                    url,
+                    len(seen),
+                    len(results) - index - 1,
+                )
+                dialog.exec()
+                picked, apply_all = dialog.result_choice()
+
+                if apply_all:
+                    choice = picked
+            else:
+                picked = choice
+
+            if picked == DownloadConflictDialog.REDOWNLOAD:
+                to_forget.update(seen)
+                queue.append(url)
+            else:
+                self.log(f"Skipped (already downloaded): {url}")
+
+        remove_archive_ids(to_forget)
+
+        if not queue:
+            self.log("")
+            self.log(self.tr_("no_new_files"))
+            self.finish()
+            return
+
+        self.download_queue = queue
+        self.total_files = len(queue)
+        self.current_index = 0
         self.run_next_download()
+
+    def start_reconvert(self):
+        if not collect_source_files(ARCHIVEV):
+            QMessageBox.information(
+                self, APP_NAME, self.tr_("reconvert_empty")
+            )
+            return
+
+        dialog = ReconvertDialog(self, TEXTS[self.config["language"]])
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        if not self.require_ffmpeg():
+            return
+
+        self.stopping = False
+        self.reconverting = True
+        self.conflict_choice = None
+        self.stats = {"converted": 0, "skipped": 0, "failed": 0}
+        self.download_queue = []
+        self.convert_queue = list(dialog.selected)
+        self.total_files = len(self.convert_queue)
+        self.current_index = 0
+
+        self.set_running(True)
+        self.reset_progress()
+        self.log("=" * 50)
+        self.run_next_convert()
+
+    def resolve_conflict(self, output):
+        """이미 결과물이 있을 때 어떻게 할지 정한다.
+
+        돌아오는 값은 실제로 쓸 경로이며, 건너뛰기를 고르면 None 이다.
+        """
+        if not output.exists():
+            return output
+
+        choice = self.conflict_choice
+
+        if choice is None:
+            dialog = ConflictDialog(
+                self,
+                TEXTS[self.config["language"]],
+                output.name,
+                len(self.convert_queue),
+            )
+            dialog.exec()
+            choice, apply_all = dialog.result_choice()
+
+            if apply_all:
+                self.conflict_choice = choice
+
+        if choice == ConflictDialog.SKIP:
+            return None
+
+        if choice == ConflictDialog.OVERWRITE:
+            return output
+
+        stem = output.stem
+        index = 2
+
+        while True:
+            candidate = output.with_name(f"{stem} ({index}){output.suffix}")
+
+            if not candidate.exists():
+                return candidate
+
+            index += 1
 
     def start_convert_only(self):
         files = collect_source_files(TEMPV) + collect_source_files(PLAYLISTV)
@@ -2466,6 +3317,7 @@ class MainWindow(QMainWindow):
             return
 
         self.stopping = False
+        self.reconverting = False
         self.stats = {"converted": 0, "skipped": 0, "failed": 0}
         self.download_queue = []
         self.convert_queue = files
@@ -2528,15 +3380,30 @@ class MainWindow(QMainWindow):
         source = self.convert_queue.pop(0)
         self.current_index += 1
 
-        output = CHANGEDV / f"{source.stem}_iPod.m4v"
+        if self.config["filename"] == "safe":
+            safe_stem = ipod_safe_text(source.stem)
+        else:
+            safe_stem = source.stem
 
-        if output.exists():
+        output = CHANGEDV / f"{safe_stem}_iPod.m4v"
+
+        if self.reconverting:
+            resolved = self.resolve_conflict(output)
+
+            if resolved is None:
+                self.log(f"Skipped: {output.name}")
+                self.stats["skipped"] += 1
+                self.run_next_convert()
+                return
+
+            output = resolved
+        elif output.exists():
             self.log(f"Skipped (already exists): {output.name}")
             self.stats["skipped"] += 1
             self.run_next_convert()
             return
 
-        temp_output = CHANGEDV / f".{source.stem}_iPod.m4v.part"
+        temp_output = CHANGEDV / f".{output.stem}.m4v.part"
         temp_output.unlink(missing_ok=True)
 
         self.current_source = source
@@ -2667,13 +3534,16 @@ class MainWindow(QMainWindow):
         self.log(f"Finished: {self.current_output.name}")
         self.stats["converted"] += 1
 
-        try:
-            shutil.move(
-                str(self.current_source), str(ARCHIVEV / self.current_source.name)
-            )
-            self.log(f"Archived: {self.current_source.name}")
-        except (OSError, shutil.Error) as e:
-            self.log(f"Archive move failed ({e})")
+        # 다시 변환일 때는 원본이 이미 보관 폴더에 있다
+        if not self.reconverting:
+            try:
+                shutil.move(
+                    str(self.current_source),
+                    str(ARCHIVEV / self.current_source.name),
+                )
+                self.log(f"Archived: {self.current_source.name}")
+            except (OSError, shutil.Error) as e:
+                self.log(f"Archive move failed ({e})")
 
         self.current_source = None
         self.current_temp = None
@@ -2741,6 +3611,9 @@ class MainWindow(QMainWindow):
         self.total_files = 0
         self.current_index = 0
 
+        self.reconverting = False
+        self.conflict_choice = None
+
         self.reset_progress()
         self.status_label.setText(summary)
         self.set_running(False)
@@ -2783,6 +3656,7 @@ def main():
     window = MainWindow()
     window.show()
     window.check_ffmpeg()
+    window.check_updates()
 
     sys.exit(app.exec())
 
