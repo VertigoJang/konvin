@@ -115,12 +115,12 @@ app = BUNDLE(
     name="Konvin.app",
     icon=str(ROOT / "assets" / "konvin.icns"),
     bundle_identifier="com.vertigojang.konvin",
-    version="3.0",
+    version="3.4",
     info_plist={
         "CFBundleName": "Konvin",
         "CFBundleDisplayName": "Konvin",
-        "CFBundleShortVersionString": "3.0",
-        "CFBundleVersion": "3.0",
+        "CFBundleShortVersionString": "3.4",
+        "CFBundleVersion": "3.4",
         "NSHighResolutionCapable": True,
         # 다크 모드를 따라가게 한다
         "NSRequiresAquaSystemAppearance": False,
