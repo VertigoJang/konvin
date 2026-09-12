@@ -400,7 +400,6 @@ TEXTS = {
         "tab_cleanup":    "정리",
         "tab_paths":      "폴더 위치",
         "tab_about":      "정보",
-        "paths":          "폴더 위치",
         "converted":      "변환 완료",
         "skipped":        "건너뜀",
         "failed":         "실패",
@@ -491,25 +490,13 @@ TEXTS = {
         "update_auto":     "시작할 때 새 버전이 있는지 확인",
         "update_title":    "새 버전이 나왔습니다",
         "update_body":     "지금 쓰는 버전은 {current} 이고, {latest} 이 나왔습니다.",
+        "update_notes_title": "이번 버전에서 바뀐 점",
         "update_open":     "릴리스 페이지 열기",
         "update_later":    "나중에",
         "update_skip":     "이 버전은 다시 알리지 않기",
         "update_none":     "최신 버전을 쓰고 있습니다.",
         "update_failed":   "확인하지 못했습니다: {error}",
         "update_checking": "확인하는 중...",
-
-        "record_title":    "다운로드 기록",
-        "record_hint":
-            "이미 받은 영상의 목록입니다. 같은 영상을 두 번 받지 않게 하려고 "
-            "쓰입니다. 폴더에서 파일을 지워도 이 기록은 남아 있어, 다시 받으려면 "
-            "여기서 초기화해야 합니다.",
-        "record_count":    "기록된 영상 {count}개",
-        "record_empty":    "기록이 없습니다.",
-        "record_reset":    "기록 초기화",
-        "record_confirm":
-            "다운로드 기록 {count}개를 지웁니다.\n"
-            "이후 같은 영상을 다시 받을 수 있게 됩니다. 계속할까요?",
-        "record_done":     "기록을 초기화했습니다.",
 
         "folder_tempv":     "tempv — 단일 영상 원본",
         "folder_playlistv": "playlistv — 재생목록 원본",
@@ -620,7 +607,6 @@ TEXTS = {
         "tab_cleanup":    "Cleanup",
         "tab_paths":      "Folders",
         "tab_about":      "About",
-        "paths":          "Folder locations",
         "converted":      "Converted",
         "skipped":        "Skipped",
         "failed":         "Failed",
@@ -713,25 +699,13 @@ TEXTS = {
         "update_auto":     "Check for a new version on startup",
         "update_title":    "A new version is available",
         "update_body":     "You have {current}; {latest} is out.",
+        "update_notes_title": "What's new in this version",
         "update_open":     "Open the release page",
         "update_later":    "Later",
         "update_skip":     "Don't tell me about this version again",
         "update_none":     "You're on the latest version.",
         "update_failed":   "Couldn't check: {error}",
         "update_checking": "Checking...",
-
-        "record_title":    "Download history",
-        "record_hint":
-            "A list of videos already downloaded, used to avoid fetching the same "
-            "one twice. Deleting the files doesn't clear this list — reset it here "
-            "if you want to download them again.",
-        "record_count":    "{count} video(s) recorded",
-        "record_empty":    "No history yet.",
-        "record_reset":    "Reset history",
-        "record_confirm":
-            "Clear {count} download record(s).\n"
-            "You'll be able to download those videos again. Continue?",
-        "record_done":     "History cleared.",
 
         "folder_tempv":     "tempv — single video originals",
         "folder_playlistv": "playlistv — playlist originals",
@@ -1408,9 +1382,9 @@ class IdResolver(QObject):
 
 
 class UpdateChecker(QObject):
-    """GitHub 릴리스를 조회해 새 버전이 있는지 본다."""
+    """GitHub 릴리스를 조회해 새 버전이 있는지, 무엇이 바뀌었는지 본다."""
 
-    finished = Signal(str, str)
+    finished = Signal(str, str, str)
 
     def run(self):
         request = urllib.request.Request(
@@ -1427,10 +1401,11 @@ class UpdateChecker(QObject):
             ) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except Exception as e:
-            self.finished.emit("", str(e))
+            self.finished.emit("", "", str(e))
             return
 
-        self.finished.emit(data.get("tag_name", ""), "")
+        notes = (data.get("body") or "").strip()
+        self.finished.emit(data.get("tag_name", ""), notes, "")
 
 
 def build_ytdlp_args(url, dest_dir, is_playlist, device):
@@ -2128,7 +2103,7 @@ class CleanupTab(QWidget):
 
 class UpdateDialog(QDialog):
 
-    def __init__(self, parent, texts, latest):
+    def __init__(self, parent, texts, latest, notes=""):
         super().__init__(parent)
 
         self.texts = texts
@@ -2145,6 +2120,16 @@ class UpdateDialog(QDialog):
         )
         body.setWordWrap(True)
         layout.addWidget(body)
+
+        if notes:
+            notes_label = QLabel(f"<b>{texts['update_notes_title']}</b>")
+            layout.addWidget(notes_label)
+
+            notes_view = QPlainTextEdit()
+            notes_view.setPlainText(notes)
+            notes_view.setReadOnly(True)
+            notes_view.setMaximumHeight(140)
+            layout.addWidget(notes_view)
 
         self.skip_box = QCheckBox(texts["update_skip"])
         layout.addWidget(self.skip_box)
@@ -2631,7 +2616,7 @@ class SettingsDialog(QDialog):
 
         self.update_thread.start()
 
-    def _on_update_checked(self, latest, error):
+    def _on_update_checked(self, latest, notes, error):
         self.update_thread.quit()
         self.update_thread.wait()
         self.update_thread = None
@@ -2647,7 +2632,7 @@ class SettingsDialog(QDialog):
 
         if latest and version_tuple(latest) > version_tuple(VERSION):
             self.update_status.setText("")
-            UpdateDialog(self, self.texts, latest).exec()
+            UpdateDialog(self, self.texts, latest, notes).exec()
             return
 
         self.update_status.setText(self.texts["update_none"])
@@ -2901,7 +2886,7 @@ class MainWindow(QMainWindow):
 
         self.update_thread.start()
 
-    def on_update_checked(self, latest, error):
+    def on_update_checked(self, latest, notes, error):
         self.update_thread.quit()
         self.update_thread.wait()
         self.update_thread = None
@@ -2916,7 +2901,7 @@ class MainWindow(QMainWindow):
         if latest == self.config.get("skip_version"):
             return
 
-        dialog = UpdateDialog(self, TEXTS[self.config["language"]], latest)
+        dialog = UpdateDialog(self, TEXTS[self.config["language"]], latest, notes)
         dialog.exec()
 
         if dialog.should_skip():
