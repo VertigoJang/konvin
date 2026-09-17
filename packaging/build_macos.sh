@@ -27,11 +27,11 @@ fi
 PY=.venv/bin/python
 
 echo
-echo "[1/4] 빌드 도구 설치"
+echo "[1/5] 빌드 도구 설치"
 "$PY" -m pip install --quiet --upgrade pyinstaller certifi
 
 echo
-echo "[2/4] 아이콘 준비"
+echo "[2/5] 아이콘 준비"
 
 if [ -f "assets/konvin.icns" ]; then
     echo "    이미 있음, 건너뜀"
@@ -52,7 +52,7 @@ else
 fi
 
 echo
-echo "[3/4] yt-dlp 내려받기"
+echo "[3/5] yt-dlp 내려받기"
 mkdir -p packaging/vendor
 
 if [ -f "packaging/vendor/yt-dlp" ]; then
@@ -71,7 +71,19 @@ else
 fi
 
 echo
-echo "[4/4] 빌드 (몇 분 걸립니다)"
+echo "[4/5] 스모크 테스트"
+
+if QT_QPA_PLATFORM=offscreen "$PY" scripts/smoke_test.py; then
+    echo "    통과"
+else
+    echo
+    echo "스모크 테스트가 실패했습니다. 빌드를 중단합니다."
+    echo "위 FAIL 항목을 고친 뒤 다시 실행하세요."
+    exit 1
+fi
+
+echo
+echo "[5/5] 빌드 (몇 분 걸립니다)"
 "$PY" -m PyInstaller --noconfirm --clean packaging/konvin_macos.spec
 
 echo

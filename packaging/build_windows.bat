@@ -27,12 +27,12 @@ if not exist ".venv\Scripts\python.exe" (
 set PY=.venv\Scripts\python.exe
 
 echo.
-echo [1/4] 빌드 도구 설치
+echo [1/5] 빌드 도구 설치
 "%PY%" -m pip install --quiet --upgrade pyinstaller pillow
 if errorlevel 1 exit /b 1
 
 echo.
-echo [2/4] 아이콘 준비
+echo [2/5] 아이콘 준비
 if exist "assets\konvin.ico" (
     echo     이미 있음, 건너뜀
 ) else (
@@ -42,7 +42,7 @@ if exist "assets\konvin.ico" (
 )
 
 echo.
-echo [3/4] yt-dlp 내려받기
+echo [3/5] yt-dlp 내려받기
 if not exist "packaging\vendor" mkdir "packaging\vendor"
 
 if exist "packaging\vendor\yt-dlp.exe" (
@@ -59,7 +59,19 @@ if exist "packaging\vendor\yt-dlp.exe" (
 )
 
 echo.
-echo [4/4] 빌드 (몇 분 걸립니다)
+echo [4/5] 스모크 테스트
+set QT_QPA_PLATFORM=offscreen
+"%PY%" scripts\smoke_test.py
+if errorlevel 1 (
+    echo.
+    echo 스모크 테스트가 실패했습니다. 빌드를 중단합니다.
+    echo 위 FAIL 항목을 고친 뒤 다시 실행하세요.
+    exit /b 1
+)
+set QT_QPA_PLATFORM=
+
+echo.
+echo [5/5] 빌드 (몇 분 걸립니다)
 "%PY%" -m PyInstaller --noconfirm --clean packaging\konvin.spec
 if errorlevel 1 exit /b 1
 
