@@ -15,12 +15,14 @@ import os
 import platform
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unicodedata
 import urllib.request
+import uuid
 import zipfile
 from collections import deque
 from pathlib import Path
@@ -118,6 +120,9 @@ CHANGEDV  = BASE / "changedv"
 ARCHIVEV  = BASE / "archivev"
 PLAYLISTV = BASE / "playlistv"
 BIN_DIR   = BASE / "bin"
+
+TRUSTED_FILE = BASE / "trusted_devices.json"
+DEVICE_ID_FILE = BASE / "device_id.txt"
 
 ARCHIVE_FILE = BASE / "download_archive.txt"
 CONFIG_FILE  = BASE / "config.json"
@@ -498,6 +503,45 @@ TEXTS = {
         "update_failed":   "확인하지 못했습니다: {error}",
         "update_checking": "확인하는 중...",
 
+        "tab_library":     "내 라이브러리",
+        "tab_network":     "네트워크",
+        "net_hint":
+            "같은 네트워크에 켜져 있는 다른 Konvin 을 찾아 영상을 가져옵니다. "
+            "상대가 허용해야 파일이 오갑니다.",
+        "net_peers":       "찾은 컴퓨터",
+        "net_videos":      "상대의 영상",
+        "net_col_name":    "파일",
+        "net_col_size":    "크기",
+        "net_refresh":     "새로 고침",
+        "net_fetch":       "가져오기",
+        "net_cancel":      "취소",
+        "net_trusted":     "신뢰 기기",
+        "net_trusted_mark": "신뢰함",
+        "net_trusted_empty": "신뢰하는 기기가 없습니다.",
+        "net_trusted_hint":
+            "여기 있는 기기는 승인 없이 내 영상을 가져갈 수 있습니다. "
+            "쓰지 않는 기기는 신뢰를 해제하세요.",
+        "net_untrust":     "신뢰 해제",
+        "net_idle":        "대기 중입니다.",
+        "net_pick_first":  "컴퓨터와 영상을 먼저 고르세요.",
+        "net_loaded":      "{peer} 의 영상 {count}개",
+        "net_connect_failed": "연결하지 못했습니다: {error}",
+        "net_failed":      "네트워크를 시작하지 못했습니다: {error}",
+        "net_no_zeroconf":
+            "이 기능을 쓰려면 zeroconf 가 필요합니다.\n"
+            "터미널에서 pip install zeroconf 를 실행한 뒤 다시 켜 주세요.",
+        "net_ask_title":   "다운로드 요청",
+        "net_ask_body":    "{peer} 가 다음 파일을 요청했습니다.",
+        "net_ask_allow":   "허용",
+        "net_ask_deny":    "거부",
+        "net_ask_always":  "이 컴퓨터는 항상 허용",
+        "net_ask_warning":
+            "항상 허용을 고르면 이후 승인 없이 이 컴퓨터가 내 영상을 "
+            "가져갈 수 있게 됩니다. 신뢰하는 내 기기에만 쓰세요.",
+        "net_allowed":     "{peer} 에게 보냅니다: {name}",
+        "net_allowed_always": "{peer} 를 항상 허용합니다: {name}",
+        "net_denied":      "{peer} 의 요청을 거부했습니다.",
+
         "folder_tempv":     "tempv — 단일 영상 원본",
         "folder_playlistv": "playlistv — 재생목록 원본",
         "folder_changedv":  "changedv — 변환 완료 영상",
@@ -706,6 +750,45 @@ TEXTS = {
         "update_none":     "You're on the latest version.",
         "update_failed":   "Couldn't check: {error}",
         "update_checking": "Checking...",
+
+        "tab_library":     "My library",
+        "tab_network":     "Network",
+        "net_hint":
+            "Finds other copies of Konvin running on your network and fetches "
+            "videos from them. Nothing is sent until the other side allows it.",
+        "net_peers":       "Computers found",
+        "net_videos":      "Their videos",
+        "net_col_name":    "File",
+        "net_col_size":    "Size",
+        "net_refresh":     "Refresh",
+        "net_fetch":       "Fetch",
+        "net_cancel":      "Cancel",
+        "net_trusted":     "Trusted devices",
+        "net_trusted_mark": "trusted",
+        "net_trusted_empty": "No trusted devices yet.",
+        "net_trusted_hint":
+            "These devices can take your videos without asking. Remove any you "
+            "no longer use.",
+        "net_untrust":     "Remove trust",
+        "net_idle":        "Idle.",
+        "net_pick_first":  "Pick a computer and a video first.",
+        "net_loaded":      "{count} video(s) on {peer}",
+        "net_connect_failed": "Could not connect: {error}",
+        "net_failed":      "Could not start networking: {error}",
+        "net_no_zeroconf":
+            "This feature needs zeroconf.\n"
+            "Run pip install zeroconf in a terminal, then restart the app.",
+        "net_ask_title":   "Download request",
+        "net_ask_body":    "{peer} is asking for this file.",
+        "net_ask_allow":   "Allow",
+        "net_ask_deny":    "Deny",
+        "net_ask_always":  "Always allow this computer",
+        "net_ask_warning":
+            "Always allowing lets this computer take your videos without asking "
+            "again. Only use it for devices you own and trust.",
+        "net_allowed":     "Sending to {peer}: {name}",
+        "net_allowed_always": "Always allowing {peer}: {name}",
+        "net_denied":      "Denied the request from {peer}.",
 
         "folder_tempv":     "tempv — single video originals",
         "folder_playlistv": "playlistv — playlist originals",
@@ -1258,6 +1341,28 @@ YOUTUBE_ID_RE = re.compile(
     r"(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/|v/))"
     r"([A-Za-z0-9_-]{11})"
 )
+
+
+def device_id():
+    """이 컴퓨터를 가리키는 고정 UUID. 없으면 만들어 둔다."""
+    if DEVICE_ID_FILE.exists():
+        try:
+            saved = DEVICE_ID_FILE.read_text(encoding="utf-8").strip()
+
+            if saved:
+                return saved
+        except OSError:
+            pass
+
+    new = str(uuid.uuid4())
+
+    try:
+        BASE.mkdir(parents=True, exist_ok=True)
+        DEVICE_ID_FILE.write_text(new, encoding="utf-8")
+    except OSError:
+        pass
+
+    return new
 
 
 def read_archive_ids():
@@ -2846,8 +2951,37 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(bottom_row)
 
-        self.setCentralWidget(central)
+        texts = TEXTS[self.config["language"]]
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(central, texts["tab_library"])
+        self.tabs.addTab(self._build_network_tab(texts), texts["tab_network"])
+
+        self.setCentralWidget(self.tabs)
         self.resize(900, COLLAPSED_HEIGHT)
+
+    def _build_network_tab(self, texts):
+        """네트워크 탭. konvin_net 이 없거나 zeroconf 가 없으면 안내만 보여 준다."""
+        self.net_service = None
+
+        try:
+            import konvin_net
+        except ImportError:
+            return QWidget()
+
+        self.konvin_net = konvin_net
+
+        if not konvin_net.zeroconf_available():
+            return konvin_net.UnavailableTab(self, texts)
+
+        name = self.config.get("device_name") or socket.gethostname()
+
+        self.net_service = konvin_net.NetService(
+            CHANGEDV, name, device_id(), TRUSTED_FILE, self
+        )
+        self.net_service.start()
+
+        return konvin_net.NetworkTab(self, texts, self.net_service, CHANGEDV)
 
     def _build_tray(self):
         self.tray = None
@@ -3625,6 +3759,9 @@ class MainWindow(QMainWindow):
             self.proc.kill()
             self.proc.waitForFinished(3000)
             self.cleanup_temp()
+
+        if getattr(self, "net_service", None):
+            self.net_service.stop()
 
         if self.tray:
             self.tray.hide()

@@ -34,6 +34,24 @@ def check(label, condition, detail=""):
         failures.append(label)
 
 
+def all_sources():
+    """scripts 안의 파이썬 파일을 모두 이어 붙인다.
+
+    문자열은 konvin.py 에 모여 있지만 쓰는 쪽은 konvin_net.py 처럼
+    다른 모듈일 수 있어서, 한 파일만 보면 안 쓰는 것으로 오해한다.
+    """
+    chunks = []
+
+    for path in sorted((ROOT / "scripts").glob("*.py")):
+        # 이 파일 자체는 건너뛴다. 설명 안의 예시가 실제 참조로 잡힌다.
+        if path.name == "smoke_test.py":
+            continue
+
+        chunks.append(path.read_text(encoding="utf-8"))
+
+    return "\n".join(chunks)
+
+
 def collect_referenced_keys(source):
     """코드가 실제로 참조하는 문자열 키를 모은다.
 
@@ -53,7 +71,7 @@ def collect_referenced_keys(source):
 
 def check_texts_complete(konvin):
     """코드가 참조하는 문자열 키가 모든 언어에 다 있는지."""
-    source = (ROOT / "scripts" / "konvin.py").read_text(encoding="utf-8")
+    source = all_sources()
 
     referenced = collect_referenced_keys(source)
 
@@ -68,7 +86,7 @@ def check_texts_complete(konvin):
 
 def check_texts_unused(konvin):
     """쓰이지 않는 문자열이 남아있지 않은지 (경고만, 실패 아님)."""
-    source = (ROOT / "scripts" / "konvin.py").read_text(encoding="utf-8")
+    source = all_sources()
 
     # 동적으로 조립되는 키는 접두사로 예외 처리한다
     dynamic_prefixes = (
@@ -125,6 +143,20 @@ def main():
     check("remove_archive_ids 존재", hasattr(konvin, "remove_archive_ids"))
     check("extract_video_id 존재", hasattr(konvin, "extract_video_id"))
     check("IdResolver 존재", hasattr(konvin, "IdResolver"))
+
+    # --- 네트워크 모듈 (v4) ---
+    try:
+        import konvin_net
+        check("konvin_net 모듈 불러오기", True)
+        check("NetService 존재", hasattr(konvin_net, "NetService"))
+        check("NetworkTab 존재", hasattr(konvin_net, "NetworkTab"))
+        check("ApprovalDialog 존재", hasattr(konvin_net, "ApprovalDialog"))
+        check("Fetcher 존재", hasattr(konvin_net, "Fetcher"))
+        check("TrustStore 존재", hasattr(konvin_net, "TrustStore"))
+    except ImportError as e:
+        check("konvin_net 모듈 불러오기", False, str(e))
+
+    check("네트워크 탭이 붙어 있음", window.tabs.count() == 2)
 
     # --- 문자열 무결성 ---
     check_texts_complete(konvin)
