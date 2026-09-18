@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v4.0"
+VERSION  = "v4.1"
 CODENAME = "Neighbours"
 
 AUTHOR     = "장현기 (VertigoJang)"
@@ -497,6 +497,19 @@ TEXTS = {
         "update_title":    "새 버전이 나왔습니다",
         "update_body":     "지금 쓰는 버전은 {current} 이고, {latest} 이 나왔습니다.",
         "update_notes_title": "이번 버전에서 바뀐 점",
+        "update_now":      "지금 업데이트",
+        "update_downloading": "내려받는 중... {percent}%",
+        "update_installing": "갈아 끼우는 중입니다. 프로그램이 곧 다시 켜집니다.",
+        "update_dl_failed": "업데이트를 받지 못했습니다: {error}",
+        "update_no_asset": "이 운영체제에 맞는 파일이 릴리스에 없습니다.",
+        "update_manual_source":
+            "소스에서 실행 중이라 자동 업데이트를 쓰지 않습니다. "
+            "저장소에서 git pull 하세요.",
+        "update_manual_platform":
+            "이 운영체제에서는 자동 업데이트를 지원하지 않습니다.",
+        "update_manual_readonly":
+            "설치된 위치를 바꿀 권한이 없어 자동 업데이트를 할 수 없습니다. "
+            "릴리스 페이지에서 직접 받아 주세요.",
         "update_open":     "릴리스 페이지 열기",
         "update_later":    "나중에",
         "update_skip":     "이 버전은 다시 알리지 않기",
@@ -759,6 +772,19 @@ TEXTS = {
         "update_title":    "A new version is available",
         "update_body":     "You have {current}; {latest} is out.",
         "update_notes_title": "What's new in this version",
+        "update_now":      "Update now",
+        "update_downloading": "Downloading... {percent}%",
+        "update_installing": "Swapping in the new version. The app will restart.",
+        "update_dl_failed": "Could not download the update: {error}",
+        "update_no_asset": "This release has no file for your system.",
+        "update_manual_source":
+            "Running from source, so there is nothing to replace. "
+            "Use git pull in the repository.",
+        "update_manual_platform":
+            "Automatic updates are not supported on this system.",
+        "update_manual_readonly":
+            "No permission to replace the installed copy. Please download "
+            "from the release page instead.",
         "update_open":     "Open the release page",
         "update_later":    "Later",
         "update_skip":     "Don't tell me about this version again",
@@ -2271,18 +2297,115 @@ class UpdateDialog(QDialog):
         self.skip_box = QCheckBox(texts["update_skip"])
         layout.addWidget(self.skip_box)
 
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+
+        self.note = QLabel("")
+        self.note.setWordWrap(True)
+        self.note.setStyleSheet("color: gray;")
+        layout.addWidget(self.note)
+
         button_row = QHBoxLayout()
 
-        open_button = QPushButton(texts["update_open"])
-        open_button.clicked.connect(self._open)
-        open_button.setDefault(True)
+        self.now_button = QPushButton(texts["update_now"])
+        self.now_button.clicked.connect(self._update_now)
 
-        later = QPushButton(texts["update_later"])
-        later.clicked.connect(self.accept)
+        self.open_button = QPushButton(texts["update_open"])
+        self.open_button.clicked.connect(self._open)
 
-        button_row.addWidget(open_button)
-        button_row.addWidget(later)
+        self.later_button = QPushButton(texts["update_later"])
+        self.later_button.clicked.connect(self.accept)
+
+        button_row.addWidget(self.now_button)
+        button_row.addWidget(self.open_button)
+        button_row.addWidget(self.later_button)
         layout.addLayout(button_row)
+
+        self._setup_self_update()
+
+    def _setup_self_update(self):
+        """갈아 끼우기가 가능한 경우에만 '지금 업데이트' 를 살려 둔다."""
+        self.downloader = None
+
+        try:
+            import konvin_update
+        except ImportError:
+            self.now_button.setVisible(False)
+            self.open_button.setDefault(True)
+            return
+
+        self.konvin_update = konvin_update
+        ok, reason = konvin_update.self_update_supported()
+
+        if ok:
+            self.now_button.setDefault(True)
+            return
+
+        # 못 하는 이유를 알려 주고 수동 안내로 넘긴다
+        self.now_button.setEnabled(False)
+        self.open_button.setDefault(True)
+
+        key = {
+            "source": "update_manual_source",
+            "platform": "update_manual_platform",
+            "readonly": "update_manual_readonly",
+        }.get(reason)
+
+        if key:
+            self.note.setText(self.texts[key])
+
+    def _update_now(self):
+        self.now_button.setEnabled(False)
+        self.later_button.setEnabled(False)
+        self.skip_box.setEnabled(False)
+        self.progress.setVisible(True)
+        self.progress.setValue(0)
+
+        self.downloader = self.konvin_update.Downloader(
+            RELEASE_API, f"{APP_NAME}/{VERSION}", self
+        )
+        self.downloader.progress.connect(self._on_progress)
+        self.downloader.done.connect(self._on_downloaded)
+        self.downloader.start()
+
+    def _on_progress(self, percent, name):
+        self.progress.setValue(percent)
+        self.note.setText(
+            self.texts["update_downloading"].format(percent=percent)
+        )
+
+    def _on_downloaded(self, ok, payload):
+        if not ok:
+            self._fail(payload)
+            return
+
+        self.note.setText(self.texts["update_installing"])
+        installed, error = self.konvin_update.install_and_restart(payload)
+
+        if not installed:
+            self._fail(error)
+            return
+
+        # 도우미가 교체를 시작하려면 이 프로그램이 꺼져야 한다
+        self.accept()
+        QApplication.quit()
+
+    def _fail(self, error):
+        if error == "no-asset":
+            message = self.texts["update_no_asset"]
+        elif error == "cancelled":
+            message = ""
+        else:
+            message = self.texts["update_dl_failed"].format(error=error)
+
+        self.progress.setVisible(False)
+        self.note.setText(message)
+        self.now_button.setEnabled(True)
+        self.later_button.setEnabled(True)
+        self.skip_box.setEnabled(True)
 
     def _open(self):
         open_url(RELEASES_URL)

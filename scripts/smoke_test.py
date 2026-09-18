@@ -92,6 +92,8 @@ def check_texts_unused(konvin):
     dynamic_prefixes = (
         "aspect_", "codec_", "filename_", "device_", "quality_",
         "folder_", "path_", "tab_", "language_name",
+        # 이유에 따라 골라 쓰는 키라 이름이 코드에 그대로 나오지 않는다
+        "update_manual_",
     )
     # format() 인자로만 쓰이는 키들
     format_only = {
@@ -157,6 +159,18 @@ def main():
         check("konvin_net 모듈 불러오기", False, str(e))
 
     check("네트워크 탭이 붙어 있음", window.tabs.count() == 2)
+
+    # --- 자동 업데이트 모듈 ---
+    try:
+        import konvin_update
+        check("konvin_update 모듈 불러오기", True)
+        check("Downloader 존재", hasattr(konvin_update, "Downloader"))
+        check("install_and_restart 존재",
+              hasattr(konvin_update, "install_and_restart"))
+        ok, reason = konvin_update.self_update_supported()
+        check("소스 실행 시 자동 업데이트를 끔", (not ok) and reason == "source")
+    except ImportError as e:
+        check("konvin_update 모듈 불러오기", False, str(e))
 
     # --- 문자열 무결성 ---
     check_texts_complete(konvin)
