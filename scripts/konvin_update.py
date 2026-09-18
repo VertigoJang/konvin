@@ -47,6 +47,21 @@ IS_FROZEN = getattr(sys, "frozen", False)
 CHUNK = 256 * 1024
 
 
+def ssl_context():
+    """macOS 의 파이썬은 시스템 인증서를 쓰지 않아 검증이 실패한다.
+
+    konvin.py 와 같은 방식으로 certifi 의 인증서를 쓴다. 이걸 빼먹으면
+    CERTIFICATE_VERIFY_FAILED 로 내려받기가 막힌다.
+    """
+    try:
+        import certifi
+        import ssl
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return None
+
+
 # ============================================
 # 이 설치본에 대해
 # ============================================
@@ -138,7 +153,9 @@ class Downloader(QThread):
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with urllib.request.urlopen(
+                request, timeout=15, context=ssl_context()
+            ) as response:
                 release = json.loads(response.read().decode("utf-8"))
         except Exception as e:
             self.done.emit(False, str(e))
@@ -164,7 +181,9 @@ class Downloader(QThread):
                 url, headers={"User-Agent": self.user_agent}
             )
 
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with urllib.request.urlopen(
+                request, timeout=30, context=ssl_context()
+            ) as response:
                 got = 0
 
                 with target.open("wb") as f:
