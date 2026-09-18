@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -140,6 +141,59 @@ class TrustStore:
             return [(k, dict(v)) for k, v in self.devices.items()]
 
 
+class AliasStore:
+    """상대 컴퓨터에 내가 붙인 이름.
+
+    이 이름은 내 컴퓨터에만 저장되고 상대에게 알려지지 않는다. 상대가 자기
+    이름을 바꿔도 여기서 붙인 이름은 그대로 남는다.
+    """
+
+    def __init__(self, path):
+        self.path = Path(path)
+        self.lock = threading.Lock()
+        self.names = self._load()
+
+    def _load(self):
+        if not self.path.exists():
+            return {}
+
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+        return data if isinstance(data, dict) else {}
+
+    def _save(self):
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                json.dumps(self.names, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+    def get(self, dev_id):
+        with self.lock:
+            return self.names.get(dev_id, "")
+
+    def set(self, dev_id, name):
+        name = (name or "").strip()
+
+        with self.lock:
+            if name:
+                self.names[dev_id] = name
+            else:
+                self.names.pop(dev_id, None)
+
+            self._save()
+
+    def label(self, peer):
+        """화면에 보일 이름. 내가 붙인 이름이 있으면 그걸 쓴다."""
+        return self.get(peer.get("id", "")) or peer.get("name", "(이름 없음)")
+
+
 class Library:
     """내줄 폴더를 훑어 목록을 만들고, id → 실제 경로 대응표를 들고 있는다.
 
@@ -206,7 +260,7 @@ class RequestDesk(QObject):
     HTTP 스레드에서 호출되지만 화면에 묻는 일은 신호로 넘긴다.
     """
 
-    asked = Signal(str, str, str, int)     # req_id, 상대 이름, 파일 이름, 크기
+    asked = Signal(str, str, str, str, int)   # req_id, 상대 id, 상대 이름, 파일, 크기
     settled = Signal(str, str)             # req_id, 결과
 
     def __init__(self, trust, parent=None):
@@ -233,7 +287,7 @@ class RequestDesk(QObject):
             return req_id, "허용"
 
         # 화면 쪽에서 받아 확인 창을 띄운다
-        self.asked.emit(req_id, peer_name, filename, size)
+        self.asked.emit(req_id, peer_id, peer_name, filename, size)
 
         return req_id, "대기"
 
@@ -430,11 +484,13 @@ class NetService(QObject):
     log = Signal(str)
     failed = Signal(str)
 
-    def __init__(self, folder, device_name, device_id, trust_path, parent=None):
+    def __init__(self, folder, device_name, device_id, trust_path,
+                 alias_path, parent=None):
         super().__init__(parent)
 
         self.library = Library(folder)
         self.trust = TrustStore(trust_path)
+        self.aliases = AliasStore(alias_path)
         self.desk = RequestDesk(self.trust, self)
 
         self.device_name = device_name
@@ -817,6 +873,10 @@ class NetworkTab(QWidget):
         self.peer_list.currentRowChanged.connect(self._peer_selected)
         left.addWidget(self.peer_list)
 
+        self.rename_button = QPushButton(texts["net_rename"])
+        self.rename_button.clicked.connect(self._rename_peer)
+        left.addWidget(self.rename_button)
+
         self.trusted_button = QPushButton(texts["net_trusted"])
         self.trusted_button.clicked.connect(self._open_trusted)
         left.addWidget(self.trusted_button)
@@ -882,9 +942,17 @@ class NetworkTab(QWidget):
         self.peer_list.clear()
 
         for p in peers:
-            mark = f"  ({self.texts['net_trusted_mark']})" \
-                if self.service.trust.is_trusted(p["id"]) else ""
-            item = QListWidgetItem(f"{p['name']}{mark}")
+            marks = []
+
+            if self.service.aliases.get(p["id"]):
+                # 내가 붙인 이름을 쓰는 중이면 상대가 광고하는 이름도 곁들인다
+                marks.append(p["name"])
+
+            if self.service.trust.is_trusted(p["id"]):
+                marks.append(self.texts["net_trusted_mark"])
+
+            suffix = f"  ({' · '.join(marks)})" if marks else ""
+            item = QListWidgetItem(f"{self.service.aliases.label(p)}{suffix}")
             item.setData(Qt.UserRole, p)
             self.peer_list.addItem(item)
 
@@ -894,6 +962,39 @@ class NetworkTab(QWidget):
         if not peers:
             self.video_tree.clear()
             self.videos = []
+
+    def _rename_peer(self):
+        """상대에게 내 컴퓨터에서만 쓸 이름을 붙인다.
+
+        상대에게는 알리지 않고, 상대가 자기 이름을 바꿔도 이 이름은 남는다.
+        """
+        peer = self._current_peer()
+
+        if not peer:
+            self.status.setText(self.texts["net_pick_peer"])
+            return
+
+        current = self.service.aliases.get(peer["id"])
+
+        name, ok = QInputDialog.getText(
+            self,
+            self.texts["net_rename"],
+            self.texts["net_rename_body"].format(peer=peer["name"]),
+            text=current or peer["name"],
+        )
+
+        if not ok:
+            return
+
+        self.service.aliases.set(peer["id"], name)
+        self._reload_peers()
+
+        if name.strip():
+            self.status.setText(
+                self.texts["net_renamed"].format(name=name.strip())
+            )
+        else:
+            self.status.setText(self.texts["net_rename_cleared"])
 
     def _current_peer(self):
         item = self.peer_list.currentItem()
@@ -940,7 +1041,8 @@ class NetworkTab(QWidget):
 
         self.status.setText(
             self.texts["net_loaded"].format(
-                peer=peer["name"], count=len(self.videos)
+                peer=self.service.aliases.label(peer),
+                count=len(self.videos),
             )
         )
 
@@ -988,15 +1090,11 @@ class NetworkTab(QWidget):
 
     # --- 들어온 요청 ---
 
-    def _on_asked(self, req_id, peer_name, filename, size):
-        peer_id = ""
+    def _on_asked(self, req_id, peer_id, peer_name, filename, size):
+        # 내가 붙인 이름이 있으면 그걸로 보여 준다
+        shown = self.service.aliases.get(peer_id) or peer_name
 
-        for p in self.service.listed_peers():
-            if p["name"] == peer_name:
-                peer_id = p["id"]
-                break
-
-        dialog = ApprovalDialog(self, self.texts, peer_name, filename, size)
+        dialog = ApprovalDialog(self, self.texts, shown, filename, size)
         dialog.raise_()
         dialog.activateWindow()
         dialog.exec()
@@ -1008,7 +1106,7 @@ class NetworkTab(QWidget):
             "always": self.texts["net_allowed_always"],
             "no": self.texts["net_denied"],
         }[dialog.decision]
-        self.status.setText(label.format(peer=peer_name, name=filename))
+        self.status.setText(label.format(peer=shown, name=filename))
 
         if dialog.decision == "always":
             self._reload_peers()

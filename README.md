@@ -54,6 +54,7 @@
 - 작업이 끝나면 시스템 알림
 - 쌓인 파일과 다운로드 기록을 정리하는 기능
 - 화면 비율 처리 선택 (레터박스 / 원본 비율 유지)
+- 같은 네트워크의 다른 컴퓨터에서 변환된 영상 가져오기 (승인 필요)
 - 한국어 / English
 - macOS · Windows · Linux 지원
 
@@ -180,11 +181,40 @@ sudo zypper install ffmpeg     # openSUSE
 | `bin` | 직접 내려받은 ffmpeg |
 
 `download_archive.txt` 에 이미 받은 영상의 목록이, `config.json` 에 설정이
-저장됩니다. 아래쪽 **파일 정리** 버튼으로 쌓인 파일을 지우거나 다운로드 기록을
-초기화할 수 있습니다.
+저장됩니다. 아래쪽 **파일 정리** 버튼으로 쌓인 파일을 지울 수 있습니다.
 
-> 폴더에서 영상을 지워도 다운로드 기록은 남아 있어, 같은 영상을 다시 받으려 하면
-> 건너뜁니다. 다시 받으려면 기록을 초기화하세요.
+> 한 번 받은 영상은 기록에 남습니다. 같은 주소를 다시 넣으면 프로그램이 알아채고
+> 다시 받을지 건너뛸지 물어봅니다. 재생목록은 안에 든 영상까지 미리 확인하므로,
+> 일부만 새로 추가된 경우에도 필요한 것만 받습니다.
+
+## 네트워크로 가져오기
+
+컴퓨터를 여러 대 쓰면 변환해 둔 영상이 여기저기 흩어지기 쉽습니다. 같은
+네트워크에 Konvin 이 켜져 있는 컴퓨터가 있으면 **네트워크** 탭에서 서로 찾아
+영상을 가져올 수 있습니다.
+
+1. 양쪽 컴퓨터에서 Konvin 을 켭니다
+2. **네트워크** 탭을 열면 찾은 컴퓨터가 왼쪽에 나옵니다
+3. 컴퓨터를 고르면 그쪽의 변환된 영상 목록이 보입니다
+4. 영상을 고르고 **가져오기** 를 누릅니다
+5. 상대 화면에 확인 창이 뜨고, **허용** 을 눌러야 파일이 전송됩니다
+
+서버도 계정도 쓰지 않습니다. 두 컴퓨터가 같은 네트워크에 동시에 켜져 있을 때만
+동작하며, 아이튠즈처럼 알아서 동기화하지는 않습니다.
+
+**승인 없이는 아무것도 나가지 않습니다.** 확인 창에서 **이 컴퓨터는 항상 허용**
+을 고르면 그 컴퓨터만 다음부터 묻지 않고 가져갈 수 있게 됩니다. **신뢰 기기**
+버튼에서 언제든 해제할 수 있습니다.
+
+**이름 바꾸기** 로 상대 컴퓨터를 부를 이름을 정할 수 있습니다. 이 이름은 내
+컴퓨터에만 저장되고 상대에게 알려지지 않으며, 상대가 자기 이름을 바꿔도 그대로
+남습니다. 내가 다른 컴퓨터에 어떻게 보일지는 **설정 › 일반** 에서 정합니다.
+
+> 이 기능에는 `zeroconf` 패키지가 필요합니다. 배포된 실행 파일에는 함께 들어
+> 있습니다. 소스에서 직접 실행할 때 빠져 있으면 네트워크 탭이 설치 방법을
+> 안내합니다.
+>
+> 서로 찾지 못하면 방화벽이나 가상 머신의 네트워크 설정을 확인해 보세요.
 
 ## 출력 형식
 
@@ -273,6 +303,7 @@ battery, so Medium is the better everyday choice.
 - System notification when the batch finishes
 - Built-in cleanup for accumulated files and download history
 - Letterbox or original aspect ratio
+- Pull converted videos from another computer on your network (they have to allow it)
 - Korean / English interface
 - macOS, Windows and Linux
 
@@ -315,6 +346,25 @@ there.
 | Linux | `~/Konvin` |
 
 Converted videos — the ones you copy to your iPod — end up in `changedv`.
+
+### Pulling videos over the network
+
+If another computer on the same network is running Konvin, the **Network** tab
+finds it and lets you pull converted videos across. No server, no account — both
+machines just have to be on at the same time. This is not iTunes-style automatic
+syncing.
+
+Nothing leaves your machine without permission: the other side gets a dialog and
+has to allow each request. Ticking **Always allow this computer** exempts that
+one device, and **Trusted devices** lets you undo it later.
+
+**Rename** sets what a peer is called on your machine only. It is never sent to
+them and survives them renaming themselves. Your own name on the network is set
+in **Settings › General**.
+
+> Needs the `zeroconf` package. It ships with the released builds; running from
+> source without it shows install instructions in the tab. If the machines can't
+> see each other, check your firewall or virtual machine network settings.
 
 ### Getting files onto the iPod
 

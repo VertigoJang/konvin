@@ -58,8 +58,8 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v3.4"
-CODENAME = "Uptodate"
+VERSION  = "v4.0"
+CODENAME = "Neighbours"
 
 AUTHOR     = "장현기 (VertigoJang)"
 COPYRIGHT  = f"Copyright (c) 2026 {AUTHOR}"
@@ -122,6 +122,7 @@ PLAYLISTV = BASE / "playlistv"
 BIN_DIR   = BASE / "bin"
 
 TRUSTED_FILE = BASE / "trusted_devices.json"
+ALIAS_FILE = BASE / "peer_names.json"
 DEVICE_ID_FILE = BASE / "device_id.txt"
 
 ARCHIVE_FILE = BASE / "download_archive.txt"
@@ -530,6 +531,20 @@ TEXTS = {
         "net_no_zeroconf":
             "이 기능을 쓰려면 zeroconf 가 필요합니다.\n"
             "터미널에서 pip install zeroconf 를 실행한 뒤 다시 켜 주세요.",
+        "net_rename":      "이름 바꾸기",
+        "net_rename_body":
+            "{peer} 를 내 컴퓨터에서 부를 이름을 정하세요.\n"
+            "이 이름은 이 컴퓨터에만 저장되며 상대에게 알려지지 않습니다. "
+            "상대가 자기 이름을 바꿔도 여기서 정한 이름은 그대로 남습니다.\n"
+            "비워 두면 상대가 쓰는 이름을 그대로 보여 줍니다.",
+        "net_renamed":     "이제 {name} 로 부릅니다.",
+        "net_rename_cleared": "상대가 쓰는 이름으로 되돌렸습니다.",
+        "net_pick_peer":   "먼저 컴퓨터를 고르세요.",
+        "net_device_box":  "네트워크에 보일 내 이름",
+        "net_device_hint":
+            "다른 컴퓨터의 목록에 이 이름으로 나타납니다. 비워 두면 "
+            "컴퓨터 이름을 그대로 씁니다. 바꾼 뒤에는 프로그램을 다시 켜야 "
+            "반영됩니다.",
         "net_ask_title":   "다운로드 요청",
         "net_ask_body":    "{peer} 가 다음 파일을 요청했습니다.",
         "net_ask_allow":   "허용",
@@ -778,6 +793,19 @@ TEXTS = {
         "net_no_zeroconf":
             "This feature needs zeroconf.\n"
             "Run pip install zeroconf in a terminal, then restart the app.",
+        "net_rename":      "Rename",
+        "net_rename_body":
+            "Choose what to call {peer} on this computer.\n"
+            "The name is stored here only and is never sent to them. It stays "
+            "put even if they rename their own computer.\n"
+            "Leave it empty to show the name they use.",
+        "net_renamed":     "Now shown as {name}.",
+        "net_rename_cleared": "Back to the name they use.",
+        "net_pick_peer":   "Pick a computer first.",
+        "net_device_box":  "My name on the network",
+        "net_device_hint":
+            "This is how you appear in other computers' lists. Leave it empty "
+            "to use the computer name. Restart the app after changing it.",
         "net_ask_title":   "Download request",
         "net_ask_body":    "{peer} is asking for this file.",
         "net_ask_allow":   "Allow",
@@ -1101,6 +1129,7 @@ def load_config():
         "check_updates": DEFAULT_CHECK_UPDATES,
         "skip_version": "",
         "language": DEFAULT_LANGUAGE,
+        "device_name": "",
     }
 
     if not CONFIG_FILE.exists():
@@ -1140,6 +1169,9 @@ def load_config():
 
     if data.get("language") in TEXTS:
         config["language"] = data["language"]
+
+    if isinstance(data.get("device_name"), str):
+        config["device_name"] = data["device_name"].strip()
 
     return config
 
@@ -2572,6 +2604,20 @@ class SettingsDialog(QDialog):
         update_layout.addLayout(update_row)
         general_layout.addWidget(update_box)
 
+        network_box = QGroupBox(texts["net_device_box"])
+        network_layout = QVBoxLayout(network_box)
+
+        self.device_name_edit = QLineEdit(self.config.get("device_name", ""))
+        self.device_name_edit.setPlaceholderText(socket.gethostname())
+        network_layout.addWidget(self.device_name_edit)
+
+        network_hint = QLabel(texts["net_device_hint"])
+        network_hint.setWordWrap(True)
+        network_hint.setStyleSheet("color: gray;")
+        network_layout.addWidget(network_hint)
+
+        general_layout.addWidget(network_box)
+
         general_layout.addStretch()
         tabs.addTab(general, texts["tab_general"])
 
@@ -2749,6 +2795,7 @@ class SettingsDialog(QDialog):
             "codec": self.codec_combo.currentData(),
             "filename": self.filename_combo.currentData(),
             "check_updates": self.update_auto_box.isChecked(),
+            "device_name": self.device_name_edit.text().strip(),
         }
 
 
@@ -2977,7 +3024,7 @@ class MainWindow(QMainWindow):
         name = self.config.get("device_name") or socket.gethostname()
 
         self.net_service = konvin_net.NetService(
-            CHANGEDV, name, device_id(), TRUSTED_FILE, self
+            CHANGEDV, name, device_id(), TRUSTED_FILE, ALIAS_FILE, self
         )
         self.net_service.start()
 
