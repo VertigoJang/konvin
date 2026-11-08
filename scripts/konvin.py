@@ -3933,6 +3933,13 @@ class MainWindow(QMainWindow):
         if getattr(self, "net_service", None):
             self.net_service.stop()
 
+        # 아직 돌고 있는 QThread가 창과 함께 파괴되면 Qt가 강제 종료(코어 덤프)한다
+        for name in ("update_thread", "resolve_thread"):
+            thread = getattr(self, name, None)
+            if thread is not None and thread.isRunning():
+                thread.quit()
+                thread.wait(11000)
+
         if self.tray:
             self.tray.hide()
 
