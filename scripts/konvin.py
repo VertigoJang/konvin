@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Konvin"
-VERSION  = "v4.5"
+VERSION  = "v4.6"
 CODENAME = "Neighbours"
 
 AUTHOR     = "장현기 (VertigoJang)"
