@@ -162,6 +162,11 @@ jobs:
   windows:
     needs: check
     runs-on: windows-latest
+    # GitHub 의 윈도우 러너는 영문 로케일(cp1252)이라 파이썬이 한글을
+    # 콘솔에 쓸 때 UnicodeEncodeError 로 죽는다. 전부 UTF-8 로 내보낸다.
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     steps:
       - uses: actions/checkout@v5
         with:
