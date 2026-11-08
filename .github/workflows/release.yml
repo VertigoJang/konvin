@@ -1,0 +1,266 @@
+name: release
+
+# v4.6 처럼 태그를 올리면 macOS 와 윈도우 빌드가 여기서 돌고,
+# 끝나면 GitHub 릴리스에 그대로 붙는다.
+#
+# 손으로 다시 돌리고 싶으면 Actions 탭에서 "Run workflow" 를 누르고
+# 태그 이름을 적으면 된다.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "다시 빌드할 태그 (예: v4.6)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ============================================
+  # 태그와 코드 안의 버전 표기가 어긋났는지 먼저 본다.
+  # 여기서 막아야 잘못된 번호가 붙은 파일이 올라가지 않는다.
+  # ============================================
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      version: ${{ steps.pick.outputs.version }}
+    steps:
+      - id: pick
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+$ ]]; then
+            echo "태그는 v4.6 형식이어야 합니다 (받은 값: $TAG)"
+            exit 1
+          fi
+          echo "tag=$TAG"            >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}"    >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.pick.outputs.tag }}
+
+      - name: 코드 안의 버전과 맞는지
+        env:
+          VERSION: ${{ steps.pick.outputs.version }}
+        run: |
+          fail=0
+          check() {
+            if grep -q -- "$2" "$1"; then
+              echo "  ok   $1 — $2"
+            else
+              echo "  틀림 $1 — '$2' 를 찾을 수 없음"
+              fail=1
+            fi
+          }
+          check scripts/konvin.py           "VERSION  = \"v$VERSION\""
+          check packaging/konvin_macos.spec "version=\"$VERSION\""
+          check packaging/konvin_macos.spec "\"CFBundleShortVersionString\": \"$VERSION\""
+          check packaging/konvin_macos.spec "\"CFBundleVersion\": \"$VERSION\""
+          check packaging/PKGBUILD          "pkgver=$VERSION"
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "버전 표기를 고치고 태그를 다시 올려 주세요. release.sh 가 이 다섯 곳을 한꺼번에 바꿥니다."
+            exit 1
+          fi
+
+  # ============================================
+  # macOS — 인텔(x86_64) 앱 번들
+  #
+  # macos-15-intel 은 GitHub 이 남겨 둔 마지막 x86_64 러너다.
+  # 기본 macos-latest 를 쓰면 애플 실리콘 전용 바이너리가 나와서
+  # 지금까지 배포한 것과 달라지므로 라벨을 고정해 둔다.
+  # ============================================
+  macos:
+    needs: check
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.tag }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          architecture: x64
+
+      - name: 아키텍처 확인
+        run: |
+          echo "러너: $(uname -m)"
+          python -c "import platform; print('파이썬:', platform.machine())"
+          test "$(python -c 'import platform; print(platform.machine())')" = "x86_64"
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-gui.txt
+          python -m pip install pyinstaller certifi
+
+      - name: 아이콘 준비
+        run: |
+          ICONSET="$RUNNER_TEMP/konvin.iconset"
+          mkdir -p "$ICONSET"
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size assets/konvin.png \
+              --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+            double=$((size * 2))
+            sips -z $double $double assets/konvin.png \
+              --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o assets/konvin.icns
+
+      - name: yt-dlp 내려받기
+        run: |
+          mkdir -p packaging/vendor
+          curl -L --fail --silent --show-error \
+            -o packaging/vendor/yt-dlp \
+            https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+          chmod +x packaging/vendor/yt-dlp
+
+      - name: 스모크 테스트
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python scripts/smoke_test.py
+
+      - name: 빌드
+        run: python -m PyInstaller --noconfirm --clean packaging/konvin_macos.spec
+
+      - name: 번들 확인
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          PLIST=dist/Konvin.app/Contents/Info.plist
+          GOT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
+          echo "Info.plist 버전: $GOT"
+          test "$GOT" = "$VERSION"
+          file dist/Konvin.app/Contents/MacOS/Konvin
+          file dist/Konvin.app/Contents/MacOS/Konvin | grep -q x86_64
+
+      # zip 으로 묶을 때 -y 가 꼭 있어야 한다. 심볼릭 링크를 따라가 버리면
+      # Qt 프레임워크의 Versions/Current 가 망가져서 앱이 켜지지 않는다.
+      - name: zip 으로 묶기
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          cd dist
+          zip -q -r -y "Konvin-$VERSION-macos-intel.zip" Konvin.app
+          ls -la Konvin-*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/Konvin-*-macos-intel.zip
+          if-no-files-found: error
+
+  # ============================================
+  # 윈도우 — 단일 exe
+  # ============================================
+  windows:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.tag }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-gui.txt
+          python -m pip install pyinstaller pillow
+
+      - name: 아이콘 준비
+        run: |
+          python -c "from PIL import Image; Image.open('assets/konvin.png').save('assets/konvin.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: yt-dlp 내려받기
+        run: |
+          New-Item -ItemType Directory -Force -Path packaging\vendor | Out-Null
+          Invoke-WebRequest `
+            -Uri https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe `
+            -OutFile packaging\vendor\yt-dlp.exe
+        shell: pwsh
+
+      - name: 스모크 테스트
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python scripts/smoke_test.py
+
+      - name: 빌드
+        run: python -m PyInstaller --noconfirm --clean packaging\konvin.spec
+
+      - name: 이름 붙이기
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          Rename-Item dist\Konvin.exe "Konvin-$env:VERSION-windows.exe"
+          Get-ChildItem dist
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/Konvin-*-windows.exe
+          if-no-files-found: error
+
+  # ============================================
+  # 릴리스 — 두 빌드가 다 끝난 뒤에만 올린다.
+  #
+  # 설명은 docs/release-notes/<태그>.md 를 쓴다. 없으면 태그 이름만 적는다.
+  # macOS 것을 먼저 붙인다 — 예전 버전의 자동 업데이트가 첨부 목록에서
+  # 처음 만나는 macOS zip 을 고르기 때문이다.
+  # ============================================
+  release:
+    needs: [check, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.tag }}
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: 올릴 파일 확인
+        run: ls -la assets
+
+      - name: 릴리스 만들기 또는 갱신
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.tag }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          NOTES="docs/release-notes/$TAG.md"
+
+          if [ -f "$NOTES" ]; then
+            NOTES_ARG=(--notes-file "$NOTES")
+            echo "설명: $NOTES"
+          else
+            NOTES_ARG=(--notes "$TAG")
+            echo "설명: 없음 — 태그 이름만 적습니다 ($NOTES 를 만들어 두면 그 내용이 들어갑니다)"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "이미 있는 릴리스에 파일을 덮어씁니다."
+            gh release upload "$TAG" \
+              "assets/Konvin-$VERSION-macos-intel.zip" \
+              "assets/Konvin-$VERSION-windows.exe" \
+              --clobber
+          else
+            gh release create "$TAG" \
+              "assets/Konvin-$VERSION-macos-intel.zip" \
+              "assets/Konvin-$VERSION-windows.exe" \
+              --title "$TAG" "${NOTES_ARG[@]}"
+          fi
+
+          gh release view "$TAG"
