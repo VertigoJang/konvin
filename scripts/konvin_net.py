@@ -17,6 +17,7 @@ net_discover.py / net_library.py / net_transfer.py 의 내용을 GUI 에 맞게
 """
 
 import json
+import os
 import secrets
 import shutil
 import socket
@@ -28,7 +29,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -55,6 +56,7 @@ VIDEO_SUFFIXES = {".mp4", ".m4v", ".mov", ".mkv", ".avi", ".webm"}
 
 ASK_TIMEOUT = 60        # 확인 창을 몇 초 기다릴지
 TOKEN_LIFETIME = 300    # 토큰이 몇 초 뒤 만료되는지
+MAX_PENDING = 20        # 동시에 떠 있을 수 있는 승인 대기 요청 수
 CHUNK = 256 * 1024
 
 
@@ -120,13 +122,28 @@ class TrustStore:
         except OSError:
             pass
 
-    def is_trusted(self, dev_id):
+    def is_trusted(self, dev_id, ip=None):
         with self.lock:
-            return dev_id in self.devices
+            dev = self.devices.get(dev_id)
 
-    def trust(self, dev_id, name):
+            if not dev:
+                return False
+
+            stored = dev.get("ip")
+
+            # 신뢰 당시의 IP 와 다르면 자동 허용하지 않는다 (ID 사칭 방지)
+            if stored and ip is not None and stored != ip:
+                return False
+
+            return True
+
+    def trust(self, dev_id, name, ip=""):
         with self.lock:
-            self.devices[dev_id] = {"name": name, "since": int(time.time())}
+            self.devices[dev_id] = {
+                "name": name,
+                "since": int(time.time()),
+                "ip": ip,
+            }
             self._save()
 
     def untrust(self, dev_id):
@@ -270,7 +287,7 @@ class RequestDesk(QObject):
         self.tokens = {}
         self.lock = threading.Lock()
 
-    def submit(self, peer_name, peer_id, file_id, filename, size):
+    def submit(self, peer_name, peer_id, file_id, filename, size, peer_ip=""):
         req_id = secrets.token_urlsafe(9)
 
         with self.lock:
@@ -279,12 +296,23 @@ class RequestDesk(QObject):
                 "token": None,
                 "at": time.time(),
                 "file_id": file_id,
+                "ip": peer_ip,
             }
 
-        if self.trust.is_trusted(peer_id):
+        if self.trust.is_trusted(peer_id, peer_ip):
             self._approve(req_id, file_id)
             self.settled.emit(req_id, f"{peer_name} → {filename} (자동 허용)")
             return req_id, "허용"
+
+        # 승인 대기 요청이 너무 많으면 더 받지 않는다 (확인 창 폭주 방지)
+        with self.lock:
+            pending = sum(1 for e in self.requests.values()
+                          if e["state"] == "대기")
+
+        if pending > MAX_PENDING:
+            with self.lock:
+                self.requests[req_id]["state"] = "거부"
+            return req_id, "거부"
 
         # 화면 쪽에서 받아 확인 창을 띄운다
         self.asked.emit(req_id, peer_id, peer_name, filename, size)
@@ -293,8 +321,12 @@ class RequestDesk(QObject):
 
     def decide(self, req_id, decision, peer_id=None, peer_name=""):
         """화면에서 사람이 고른 결과를 알려 준다."""
+        with self.lock:
+            entry = self.requests.get(req_id)
+            peer_ip = entry.get("ip", "") if entry else ""
+
         if decision == "always" and peer_id:
-            self.trust.trust(peer_id, peer_name)
+            self.trust.trust(peer_id, peer_name, peer_ip)
 
         with self.lock:
             entry = self.requests.get(req_id)
@@ -451,8 +483,17 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             length = int(self.headers.get("Content-Length", 0))
+
+            if length < 0 or length > 64 * 1024:
+                self._json({"error": "요청이 너무 큽니다"}, status=400)
+                return
+
             body = json.loads(self.rfile.read(length).decode("utf-8"))
         except (ValueError, json.JSONDecodeError):
+            self._json({"error": "요청을 읽지 못했습니다"}, status=400)
+            return
+
+        if not isinstance(body, dict):
             self._json({"error": "요청을 읽지 못했습니다"}, status=400)
             return
 
@@ -469,6 +510,7 @@ class Handler(BaseHTTPRequestHandler):
             body.get("file_id", ""),
             info["path"].name,
             info["size"],
+            self.client_address[0],
         )
         self._json({"request_id": req_id, "state": state})
 
@@ -678,7 +720,20 @@ class Fetcher(QThread):
 
     def run(self):
         video = self.video
-        target = self.save_dir / video["filename"]
+
+        # 상대가 준 파일 이름을 그대로 경로에 쓰지 않는다. 디렉터리 부분을
+        # 떼어내고 저장 폴더를 벗어나지 않는지 확인한다 (경로 탈출 방지).
+        safe_name = os.path.basename(video.get("filename", ""))
+
+        if not safe_name or safe_name in (".", ".."):
+            self.done.emit(False, "받을 파일 이름이 올바르지 않습니다.")
+            return
+
+        target = (self.save_dir / safe_name).resolve()
+
+        if self.save_dir.resolve() not in target.parents:
+            self.done.emit(False, "저장 폴더를 벗어나는 경로입니다.")
+            return
 
         if target.exists():
             self.done.emit(False, f"이미 같은 이름의 파일이 있습니다: {target.name}")
@@ -807,10 +862,13 @@ class ApprovalDialog(QDialog):
         layout.setSpacing(12)
 
         head = QLabel(texts["net_ask_body"].format(peer=peer_name))
+        head.setTextFormat(Qt.PlainText)
         head.setWordWrap(True)
         layout.addWidget(head)
 
-        file_label = QLabel(f"<b>{filename}</b>  ({human_size(size)})")
+        file_label = QLabel(f"{filename}  ({human_size(size)})")
+        file_label.setTextFormat(Qt.PlainText)
+        file_label.setStyleSheet("font-weight: bold;")
         file_label.setWordWrap(True)
         layout.addWidget(file_label)
 
@@ -930,6 +988,11 @@ class NetworkTab(QWidget):
         self.service.desk.settled.connect(self._on_settled)
         self.service.log.connect(self.status.setText)
         self.service.failed.connect(self._on_failed)
+
+        # 오래된 요청·토큰을 주기적으로 치운다 (메모리 증가·요청 누적 방지)
+        self._sweep_timer = QTimer(self)
+        self._sweep_timer.timeout.connect(self.service.desk.sweep)
+        self._sweep_timer.start(30000)
 
         self._reload_peers()
 

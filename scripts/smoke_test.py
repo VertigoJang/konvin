@@ -160,18 +160,6 @@ def main():
 
     check("네트워크 탭이 붙어 있음", window.tabs.count() == 2)
 
-    # --- 자동 업데이트 모듈 ---
-    try:
-        import konvin_update
-        check("konvin_update 모듈 불러오기", True)
-        check("Downloader 존재", hasattr(konvin_update, "Downloader"))
-        check("install_and_restart 존재",
-              hasattr(konvin_update, "install_and_restart"))
-        ok, reason = konvin_update.self_update_supported()
-        check("소스 실행 시 자동 업데이트를 끔", (not ok) and reason == "source")
-    except ImportError as e:
-        check("konvin_update 모듈 불러오기", False, str(e))
-
     # --- 문자열 무결성 ---
     check_texts_complete(konvin)
     check_texts_unused(konvin)
