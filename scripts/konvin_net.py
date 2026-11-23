@@ -1237,15 +1237,16 @@ class NetworkTab(QWidget):
 
 
 class UnavailableTab(QWidget):
-    """zeroconf 가 없을 때 대신 보여 주는 안내."""
+    """네트워크 탭을 쓸 수 없을 때 대신 보여 주는 안내."""
 
-    def __init__(self, parent, texts):
+    def __init__(self, parent, texts, message=None):
         super().__init__(parent)
 
         layout = QVBoxLayout(self)
         layout.addStretch()
 
-        label = QLabel(texts["net_no_zeroconf"])
+        label = QLabel(message or texts["net_no_zeroconf"])
+        label.setTextFormat(Qt.PlainText)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignCenter)
         layout.addWidget(label)

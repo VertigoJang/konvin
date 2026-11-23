@@ -160,6 +160,20 @@ def main():
 
     check("네트워크 탭이 붙어 있음", window.tabs.count() == 2)
 
+    # --- 입력 검증과 네트워크 기본값 ---
+    check("옵션 모양 입력을 주소로 받지 않음",
+          konvin.normalize_url("--exec=x") is None
+          and konvin.normalize_url("-o/tmp/x") is None)
+    check("주소에 https:// 를 붙여 줌",
+          konvin.normalize_url("youtu.be/abc") == "https://youtu.be/abc")
+    check("yt-dlp 인자에서 주소 앞에 -- 가 있음",
+          konvin.build_ytdlp_args(
+              "https://x/y", konvin.TEMPV, False, konvin.DEFAULT_DEVICE
+          )[-2:] == ["--", "https://x/y"])
+    # load_config() 는 사용자의 실제 설정을 읽으므로 기본값은 소스에서 확인한다
+    check("네트워크 공유 기본값이 꺼짐",
+          '"network_enabled": False' in Path(konvin.__file__).read_text(encoding="utf-8"))
+
     # --- 문자열 무결성 ---
     check_texts_complete(konvin)
     check_texts_unused(konvin)

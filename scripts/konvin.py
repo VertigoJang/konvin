@@ -381,6 +381,9 @@ TEXTS = {
         "eta_left":       "약 {time} 남음",
         "output_path":    "저장 위치: {path}",
         "no_url":         "주소를 먼저 추가하세요.",
+        "invalid_url":
+            "주소로 볼 수 없는 입력입니다. http:// 또는 https:// 로 시작하는 "
+            "주소를 넣어 주세요.",
         "no_files":       "변환할 파일이 없습니다.",
         "no_new_files":   "변환할 새 파일이 없습니다.",
         "closing":        "작업이 진행 중입니다. 종료할까요?",
@@ -554,6 +557,12 @@ TEXTS = {
         "net_rename_cleared": "상대가 쓰는 이름으로 되돌렸습니다.",
         "net_pick_peer":   "먼저 컴퓨터를 고르세요.",
         "net_device_box":  "네트워크에 보일 내 이름",
+        "net_enable":      "네트워크 공유 켜기 (다시 켠 뒤 반영)",
+        "net_disabled":
+            "네트워크 공유가 꺼져 있습니다.\n"
+            "켜 두는 동안에는 같은 네트워크의 다른 기기가 이 컴퓨터의 변환된 "
+            "영상 목록을 볼 수 있습니다. 믿을 수 있는 네트워크에서만 "
+            "설정 › 일반 에서 켜 주세요.",
         "net_device_hint":
             "다른 컴퓨터의 목록에 이 이름으로 나타납니다. 비워 두면 "
             "컴퓨터 이름을 그대로 씁니다. 바꾼 뒤에는 프로그램을 다시 켜야 "
@@ -654,6 +663,9 @@ TEXTS = {
         "eta_left":       "about {time} left",
         "output_path":    "Output: {path}",
         "no_url":         "Add a URL first.",
+        "invalid_url":
+            "That does not look like a URL. Enter an address starting with "
+            "http:// or https://.",
         "no_files":       "No files to convert.",
         "no_new_files":   "No new files to convert.",
         "closing":        "A task is running. Quit anyway?",
@@ -829,6 +841,12 @@ TEXTS = {
         "net_rename_cleared": "Back to the name they use.",
         "net_pick_peer":   "Pick a computer first.",
         "net_device_box":  "My name on the network",
+        "net_enable":      "Turn on network sharing (applies after restart)",
+        "net_disabled":
+            "Network sharing is off.\n"
+            "While it is on, other devices on the same network can see the "
+            "list of your converted videos. Turn it on in Settings › General "
+            "only on a network you trust.",
         "net_device_hint":
             "This is how you appear in other computers' lists. Leave it empty "
             "to use the computer name. Restart the app after changing it.",
@@ -1156,6 +1174,7 @@ def load_config():
         "skip_version": "",
         "language": DEFAULT_LANGUAGE,
         "device_name": "",
+        "network_enabled": False,
     }
 
     if not CONFIG_FILE.exists():
@@ -1198,6 +1217,9 @@ def load_config():
 
     if isinstance(data.get("device_name"), str):
         config["device_name"] = data["device_name"].strip()
+
+    if isinstance(data.get("network_enabled"), bool):
+        config["network_enabled"] = data["network_enabled"]
 
     return config
 
@@ -1471,6 +1493,26 @@ def remove_archive_ids(ids):
         pass
 
 
+def normalize_url(text):
+    """입력란의 글자를 주소로 다듬는다. 주소로 볼 수 없으면 None.
+
+    이 값은 yt-dlp 의 인자로 넘어간다. "-" 로 시작하는 입력은 주소가 아니라
+    옵션으로 해석되므로 받지 않는다.
+    """
+    url = (text or "").strip()
+
+    if not url or url.startswith("-") or any(c.isspace() for c in url):
+        return None
+
+    if "://" not in url:
+        url = "https://" + url
+
+    if not url.lower().startswith(("http://", "https://")):
+        return None
+
+    return url
+
+
 def extract_video_id(url):
     """단일 영상 주소에서 아이디를 뽑는다. 못 뽑으면 None."""
     match = YOUTUBE_ID_RE.search(url)
@@ -1529,7 +1571,7 @@ class IdResolver(QObject):
                     "--flat-playlist",
                     "--no-warnings",
                     "--print", "%(id)s",
-                    url,
+                    "--", url,
                 ],
                 capture_output=True,
                 text=True,
@@ -1600,7 +1642,8 @@ def build_ytdlp_args(url, dest_dir, is_playlist, device):
     else:
         args += ["--no-playlist"]
 
-    args.append(url)
+    # "--" 뒤는 옵션으로 해석되지 않는다 (옵션 주입 방지)
+    args += ["--", url]
     return args
 
 
@@ -2730,6 +2773,12 @@ class SettingsDialog(QDialog):
         network_box = QGroupBox(texts["net_device_box"])
         network_layout = QVBoxLayout(network_box)
 
+        self.network_enable_box = QCheckBox(texts["net_enable"])
+        self.network_enable_box.setChecked(
+            bool(self.config.get("network_enabled", False))
+        )
+        network_layout.addWidget(self.network_enable_box)
+
         self.device_name_edit = QLineEdit(self.config.get("device_name", ""))
         self.device_name_edit.setPlaceholderText(socket.gethostname())
         network_layout.addWidget(self.device_name_edit)
@@ -2919,6 +2968,7 @@ class SettingsDialog(QDialog):
             "filename": self.filename_combo.currentData(),
             "check_updates": self.update_auto_box.isChecked(),
             "device_name": self.device_name_edit.text().strip(),
+            "network_enabled": self.network_enable_box.isChecked(),
         }
 
 
@@ -3140,6 +3190,12 @@ class MainWindow(QMainWindow):
             return QWidget()
 
         self.konvin_net = konvin_net
+
+        # 기본값은 꺼짐. 켜지 않으면 서버도 광고도 시작하지 않는다.
+        if not self.config.get("network_enabled", False):
+            return konvin_net.UnavailableTab(
+                self, texts, texts["net_disabled"]
+            )
 
         if not konvin_net.zeroconf_available():
             return konvin_net.UnavailableTab(self, texts)
@@ -3404,9 +3460,11 @@ class MainWindow(QMainWindow):
     # --------------------------------------------
 
     def add_url(self):
-        url = self.url_edit.text().strip()
+        url = normalize_url(self.url_edit.text())
 
-        if not url:
+        if url is None:
+            if self.url_edit.text().strip():
+                QMessageBox.warning(self, APP_NAME, self.tr_("invalid_url"))
             return
 
         self.url_list.addItem(url)

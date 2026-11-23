@@ -146,11 +146,14 @@ sudo zypper install ffmpeg     # openSUSE
 네트워크에 Konvin 이 켜져 있는 컴퓨터가 있으면 **네트워크** 탭에서 서로 찾아
 영상을 가져올 수 있습니다.
 
-1. 양쪽 컴퓨터에서 Konvin 을 켭니다
+1. 양쪽 컴퓨터에서 **설정 › 일반** 의 **네트워크 공유 켜기** 를 체크하고 Konvin 을 다시 켭니다
 2. **네트워크** 탭을 열면 찾은 컴퓨터가 왼쪽에 나옵니다
 3. 컴퓨터를 고르면 그쪽의 변환된 영상 목록이 보입니다
 4. 영상을 고르고 **가져오기** 를 누릅니다
 5. 상대 화면에 확인 창이 뜨고, **허용** 을 눌러야 파일이 전송됩니다
+
+이 기능은 기본으로 꺼져 있습니다. 켜 두는 동안에는 같은 네트워크의 다른 기기가
+변환된 영상 목록을 볼 수 있으니, 믿을 수 있는 네트워크에서만 켜세요.
 
 서버도 계정도 쓰지 않습니다. 두 컴퓨터가 같은 네트워크에 동시에 켜져 있을 때만
 동작하며, 아이튠즈처럼 알아서 동기화하지는 않습니다.
@@ -284,6 +287,11 @@ If another computer on the same network is running Konvin, the **Network** tab
 finds it and lets you pull converted videos across. No server, no account — both
 machines just have to be on at the same time. This is not iTunes-style automatic
 syncing.
+
+Network sharing is off by default. Turn it on in **Settings › General** on both
+machines and restart the app. While it is on, other devices on the same network
+can see the list of your converted videos, so only enable it on a network you
+trust.
 
 Nothing leaves your machine without permission: the other side gets a dialog and
 has to allow each request. Ticking **Always allow this computer** exempts that
