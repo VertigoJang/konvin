@@ -148,27 +148,33 @@ sudo zypper install ffmpeg     # openSUSE
 
 1. 양쪽 컴퓨터에서 **설정 › 일반** 의 **네트워크 공유 켜기** 를 체크하고 Konvin 을 다시 켭니다
 2. **네트워크** 탭을 열면 찾은 컴퓨터가 왼쪽에 나옵니다
-3. 컴퓨터를 고르면 그쪽의 변환된 영상 목록이 보입니다
-4. 영상을 고르고 **가져오기** 를 누릅니다
-5. 상대 화면에 확인 창이 뜨고, **허용** 을 눌러야 파일이 전송됩니다
+3. 처음 만난 컴퓨터는 고른 뒤 **페어링** 을 누릅니다. 내 화면에 6자리 코드가
+   뜨고, 상대 화면에 뜬 창에 그 코드를 입력하면 페어링됩니다
+4. 페어링된 컴퓨터를 고르면 그쪽의 변환된 영상 목록이 보입니다
+5. 영상을 고르고 **가져오기** 를 누릅니다
+6. 상대 화면에 확인 창이 뜨고, **허용** 을 눌러야 파일이 전송됩니다
 
-이 기능은 기본으로 꺼져 있습니다. 켜 두는 동안에는 같은 네트워크의 다른 기기가
-변환된 영상 목록을 볼 수 있으니, 믿을 수 있는 네트워크에서만 켜세요.
+이 기능은 기본으로 꺼져 있습니다. 켜 두는 동안에는 같은 네트워크에 이 컴퓨터의
+이름이 보입니다. 영상 목록은 페어링한 컴퓨터만 볼 수 있고, 주고받는 내용은
+암호화됩니다.
+
+상대 화면에서 코드를 입력한 적이 없는데 페어링이 됐다고 나오면 진짜 상대가
+아닙니다. **페어링된 기기** 버튼에서 바로 해제하세요.
 
 서버도 계정도 쓰지 않습니다. 두 컴퓨터가 같은 네트워크에 동시에 켜져 있을 때만
 동작하며, 아이튠즈처럼 알아서 동기화하지는 않습니다.
 
 **승인 없이는 아무것도 나가지 않습니다.** 확인 창에서 **이 컴퓨터는 항상 허용**
-을 고르면 그 컴퓨터만 다음부터 묻지 않고 가져갈 수 있게 됩니다. **신뢰 기기**
-버튼에서 언제든 해제할 수 있습니다.
+을 고르면 그 컴퓨터만 다음부터 묻지 않고 가져갈 수 있게 됩니다. **페어링된
+기기** 버튼에서 신뢰와 페어링을 언제든 해제할 수 있습니다.
 
 **이름 바꾸기** 로 상대 컴퓨터를 부를 이름을 정할 수 있습니다. 이 이름은 내
 컴퓨터에만 저장되고 상대에게 알려지지 않으며, 상대가 자기 이름을 바꿔도 그대로
 남습니다. 내가 다른 컴퓨터에 어떻게 보일지는 **설정 › 일반** 에서 정합니다.
 
-> 이 기능에는 `zeroconf` 패키지가 필요합니다. 배포된 실행 파일에는 함께 들어
-> 있습니다. 소스에서 직접 실행할 때 빠져 있으면 네트워크 탭이 설치 방법을
-> 안내합니다.
+> 이 기능에는 `zeroconf` 와 `cryptography` 패키지가 필요합니다.
+> `requirements-gui.txt` 에 들어 있고, 빠져 있으면 네트워크 탭이 설치 방법을
+> 안내합니다. 양쪽 컴퓨터의 Konvin 버전이 같아야 서로 보입니다.
 >
 > 서로 찾지 못하면 방화벽이나 가상 머신의 네트워크 설정을 확인해 보세요.
 
@@ -289,21 +295,28 @@ machines just have to be on at the same time. This is not iTunes-style automatic
 syncing.
 
 Network sharing is off by default. Turn it on in **Settings › General** on both
-machines and restart the app. While it is on, other devices on the same network
-can see the list of your converted videos, so only enable it on a network you
-trust.
+machines and restart the app. While it is on, this computer's name is visible on
+the network.
+
+A computer you have not met before has to be paired once: pick it, press
+**Pair**, and type the 6-digit code from your screen into the window that opens
+on the other machine. Only paired computers can see your list of videos, and
+everything sent between them is encrypted. If pairing succeeds without anyone
+typing the code on the other machine, it is not the machine you think it is —
+remove it under **Paired devices**.
 
 Nothing leaves your machine without permission: the other side gets a dialog and
 has to allow each request. Ticking **Always allow this computer** exempts that
-one device, and **Trusted devices** lets you undo it later.
+one device, and **Paired devices** lets you undo it later.
 
 **Rename** sets what a peer is called on your machine only. It is never sent to
 them and survives them renaming themselves. Your own name on the network is set
 in **Settings › General**.
 
-> Needs the `zeroconf` package. It ships with the released builds; running from
-> source without it shows install instructions in the tab. If the machines can't
-> see each other, check your firewall or virtual machine network settings.
+> Needs the `zeroconf` and `cryptography` packages (both in
+> `requirements-gui.txt`); without them the tab shows install instructions. Both
+> machines must run the same Konvin version to see each other. If they still
+> can't, check your firewall or virtual machine network settings.
 
 ### Getting files onto the iPod
 

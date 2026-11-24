@@ -524,7 +524,8 @@ TEXTS = {
         "tab_network":     "네트워크",
         "net_hint":
             "같은 네트워크에 켜져 있는 다른 Konvin 을 찾아 영상을 가져옵니다. "
-            "상대가 허용해야 파일이 오갑니다.",
+            "처음 만난 컴퓨터와는 페어링을 해야 하고, 상대가 허용해야 파일이 "
+            "오갑니다.",
         "net_peers":       "찾은 컴퓨터",
         "net_videos":      "상대의 영상",
         "net_col_name":    "파일",
@@ -532,13 +533,36 @@ TEXTS = {
         "net_refresh":     "새로 고침",
         "net_fetch":       "가져오기",
         "net_cancel":      "취소",
-        "net_trusted":     "신뢰 기기",
+        "net_trusted":     "페어링된 기기",
         "net_trusted_mark": "신뢰함",
-        "net_trusted_empty": "신뢰하는 기기가 없습니다.",
+        "net_paired_mark": "페어링됨",
+        "net_paired_empty": "페어링된 기기가 없습니다.",
         "net_trusted_hint":
-            "여기 있는 기기는 승인 없이 내 영상을 가져갈 수 있습니다. "
-            "쓰지 않는 기기는 신뢰를 해제하세요.",
+            "페어링된 기기는 내 영상 목록을 볼 수 있습니다. '신뢰함' 표시가 "
+            "있는 기기는 승인 없이 영상을 가져갈 수도 있습니다. 쓰지 않는 "
+            "기기는 페어링을 해제하세요.",
         "net_untrust":     "신뢰 해제",
+        "net_unpair":      "페어링 해제",
+        "net_pair":        "페어링",
+        "net_pair_title":  "페어링",
+        "net_pair_show_body":
+            "{peer} 의 화면에 뜬 창에 아래 코드를 입력하세요.",
+        "net_pair_waiting": "상대가 코드를 입력하기를 기다리는 중...",
+        "net_pair_ask_body":
+            "{peer} 가 페어링을 요청했습니다. 그 컴퓨터 화면에 보이는 "
+            "6자리 코드를 입력하세요.",
+        "net_pair_ask_warning":
+            "코드를 직접 확인할 수 없는 요청은 거부하세요. 페어링된 기기는 "
+            "내 영상 목록을 볼 수 있습니다.",
+        "net_pair_done":   "{peer} 와 페어링했습니다.",
+        "net_pair_mismatch": "코드가 달라 페어링을 거부했습니다.",
+        "net_pair_denied": "페어링을 거부했습니다.",
+        "net_pair_lost":
+            "상대가 페어링을 해제했습니다. 다시 페어링하세요.",
+        "net_need_pair":
+            "이 컴퓨터의 영상을 보려면 먼저 페어링하세요.",
+        "net_already_paired": "이미 페어링된 컴퓨터입니다.",
+        "net_loading":     "목록을 불러오는 중...",
         "net_idle":        "대기 중입니다.",
         "net_pick_first":  "컴퓨터와 영상을 먼저 고르세요.",
         "net_loaded":      "{peer} 의 영상 {count}개",
@@ -547,6 +571,9 @@ TEXTS = {
         "net_no_zeroconf":
             "이 기능을 쓰려면 zeroconf 가 필요합니다.\n"
             "터미널에서 pip install zeroconf 를 실행한 뒤 다시 켜 주세요.",
+        "net_no_crypto":
+            "이 기능을 쓰려면 cryptography 가 필요합니다.\n"
+            "터미널에서 pip install cryptography 를 실행한 뒤 다시 켜 주세요.",
         "net_rename":      "이름 바꾸기",
         "net_rename_body":
             "{peer} 를 내 컴퓨터에서 부를 이름을 정하세요.\n"
@@ -560,9 +587,9 @@ TEXTS = {
         "net_enable":      "네트워크 공유 켜기 (다시 켠 뒤 반영)",
         "net_disabled":
             "네트워크 공유가 꺼져 있습니다.\n"
-            "켜 두는 동안에는 같은 네트워크의 다른 기기가 이 컴퓨터의 변환된 "
-            "영상 목록을 볼 수 있습니다. 믿을 수 있는 네트워크에서만 "
-            "설정 › 일반 에서 켜 주세요.",
+            "켜 두는 동안에는 같은 네트워크에 이 컴퓨터의 이름이 보이고, "
+            "페어링한 기기는 변환된 영상 목록을 볼 수 있습니다. "
+            "설정 › 일반 에서 켤 수 있습니다.",
         "net_device_hint":
             "다른 컴퓨터의 목록에 이 이름으로 나타납니다. 비워 두면 "
             "컴퓨터 이름을 그대로 씁니다. 바꾼 뒤에는 프로그램을 다시 켜야 "
@@ -808,7 +835,8 @@ TEXTS = {
         "tab_network":     "Network",
         "net_hint":
             "Finds other copies of Konvin running on your network and fetches "
-            "videos from them. Nothing is sent until the other side allows it.",
+            "videos from them. A computer you have not met before has to be "
+            "paired first, and nothing is sent until the other side allows it.",
         "net_peers":       "Computers found",
         "net_videos":      "Their videos",
         "net_col_name":    "File",
@@ -816,13 +844,36 @@ TEXTS = {
         "net_refresh":     "Refresh",
         "net_fetch":       "Fetch",
         "net_cancel":      "Cancel",
-        "net_trusted":     "Trusted devices",
+        "net_trusted":     "Paired devices",
         "net_trusted_mark": "trusted",
-        "net_trusted_empty": "No trusted devices yet.",
+        "net_paired_mark": "paired",
+        "net_paired_empty": "No paired devices yet.",
         "net_trusted_hint":
-            "These devices can take your videos without asking. Remove any you "
-            "no longer use.",
+            "Paired devices can see the list of your videos. Those marked "
+            "'trusted' can also take videos without asking. Unpair any you no "
+            "longer use.",
         "net_untrust":     "Remove trust",
+        "net_unpair":      "Unpair",
+        "net_pair":        "Pair",
+        "net_pair_title":  "Pairing",
+        "net_pair_show_body":
+            "Type the code below into the window that opened on {peer}.",
+        "net_pair_waiting": "Waiting for the code to be entered there...",
+        "net_pair_ask_body":
+            "{peer} wants to pair. Type the 6-digit code shown on that "
+            "computer's screen.",
+        "net_pair_ask_warning":
+            "Deny any request whose code you cannot see for yourself. Paired "
+            "devices can see the list of your videos.",
+        "net_pair_done":   "Paired with {peer}.",
+        "net_pair_mismatch": "The code did not match, so pairing was denied.",
+        "net_pair_denied": "Pairing denied.",
+        "net_pair_lost":
+            "The other side removed the pairing. Pair again.",
+        "net_need_pair":
+            "Pair with this computer to see its videos.",
+        "net_already_paired": "Already paired with this computer.",
+        "net_loading":     "Loading the list...",
         "net_idle":        "Idle.",
         "net_pick_first":  "Pick a computer and a video first.",
         "net_loaded":      "{count} video(s) on {peer}",
@@ -831,6 +882,9 @@ TEXTS = {
         "net_no_zeroconf":
             "This feature needs zeroconf.\n"
             "Run pip install zeroconf in a terminal, then restart the app.",
+        "net_no_crypto":
+            "This feature needs cryptography.\n"
+            "Run pip install cryptography in a terminal, then restart the app.",
         "net_rename":      "Rename",
         "net_rename_body":
             "Choose what to call {peer} on this computer.\n"
@@ -844,9 +898,9 @@ TEXTS = {
         "net_enable":      "Turn on network sharing (applies after restart)",
         "net_disabled":
             "Network sharing is off.\n"
-            "While it is on, other devices on the same network can see the "
-            "list of your converted videos. Turn it on in Settings › General "
-            "only on a network you trust.",
+            "While it is on, this computer's name is visible on the network "
+            "and paired devices can see the list of your converted videos. "
+            "Turn it on in Settings › General.",
         "net_device_hint":
             "This is how you appear in other computers' lists. Leave it empty "
             "to use the computer name. Restart the app after changing it.",
@@ -3199,6 +3253,11 @@ class MainWindow(QMainWindow):
 
         if not konvin_net.zeroconf_available():
             return konvin_net.UnavailableTab(self, texts)
+
+        if not konvin_net.crypto_available():
+            return konvin_net.UnavailableTab(
+                self, texts, texts["net_no_crypto"]
+            )
 
         name = self.config.get("device_name") or socket.gethostname()
 

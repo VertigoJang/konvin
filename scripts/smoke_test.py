@@ -155,6 +155,35 @@ def main():
         check("ApprovalDialog 존재", hasattr(konvin_net, "ApprovalDialog"))
         check("Fetcher 존재", hasattr(konvin_net, "Fetcher"))
         check("TrustStore 존재", hasattr(konvin_net, "TrustStore"))
+        check("PairStore 존재", hasattr(konvin_net, "PairStore"))
+        check("Pairer 존재", hasattr(konvin_net, "Pairer"))
+        check("cryptography 사용 가능", konvin_net.crypto_available())
+
+        # 네트워크 공유는 기본으로 꺼져 있어 MainWindow 만으로는 탭이 만들어지지
+        # 않는다. 서비스를 시작하지 않은 채로 탭과 창을 직접 만들어 본다.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            service = konvin_net.NetService(
+                tmp, "smoke", "smoke-0000", Path(tmp) / "trusted.json",
+                Path(tmp) / "alias.json",
+            )
+            texts = konvin.TEXTS["ko"]
+            tab = konvin_net.NetworkTab(None, texts, service, tmp)
+            check("NetworkTab 생성", tab is not None)
+            check("PairCodeDialog 생성",
+                  konvin_net.PairCodeDialog(tab, texts, "x") is not None)
+            check("PairApproveDialog 생성",
+                  konvin_net.PairApproveDialog(tab, texts, "x") is not None)
+            tab.deleteLater()
+        check("페어링 코드가 6자리 숫자",
+              len(konvin_net.pairing_code("a", "b", "c", "d")) == 6
+              and konvin_net.pairing_code("a", "b", "c", "d").isdigit())
+        check("목록에서 경로가 섞인 파일 이름을 걸러 냄",
+              konvin_net.clean_listing({"videos": [
+                  {"id": "x", "filename": "../../a.m4v", "size": 1},
+                  {"id": "y", "filename": "b.m4v", "size": -1},
+                  {"id": "z", "filename": "..", "size": 1},
+              ]}) == [{"id": "x", "filename": "a.m4v", "size": 1}])
     except ImportError as e:
         check("konvin_net 모듈 불러오기", False, str(e))
 
